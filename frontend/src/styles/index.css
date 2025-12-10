@@ -1,0 +1,169 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Base Colors - Zinc 50 */
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    
+    /* UI Borders & Inputs */
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    
+    /* Magic UI Rainbow/Gradient Tokens [cite: 59-70] */
+    --color-1: 0 100% 63%;   /* Red */
+    --color-2: 270 100% 63%; /* Purple */
+    --color-3: 210 100% 63%; /* Blue */
+    --color-4: 195 100% 63%; /* Cyan */
+    --color-5: 90 100% 63%;  /* Green */
+    
+    /* Chart / Tool Colors (optional usage) */
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    /* Base Colors - Zinc 950 */
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    
+    /* UI Borders & Inputs */
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+    
+    /* Magic UI Tokens for Dark Mode */
+    --color-1: 0 100% 63%;
+    --color-2: 270 100% 63%;
+    --color-3: 210 100% 63%;
+    --color-4: 195 100% 63%;
+    --color-5: 90 100% 63%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    /* Optimizes font rendering for Inter [cite: 92] */
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Glassmorphism Utilities [cite: 34, 38]                                   */
+/* -------------------------------------------------------------------------- */
+
+.glass {
+  @apply bg-white/70 backdrop-blur-xl border-b border-white/20 
+         dark:bg-black/70 dark:border-white/10 shadow-sm 
+         supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-black/60;
+}
+
+.glass-card {
+  @apply bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md 
+         border border-zinc-200 dark:border-zinc-800 shadow-xl;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Text & Gradient Effects [cite: 47]                                       */
+/* -------------------------------------------------------------------------- */
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r 
+         from-indigo-500 via-purple-500 to-pink-500;
+}
+
+.shine-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.shine-effect::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: 0.5s;
+}
+
+.shine-effect:hover::after {
+  left: 100%;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Animations                                                                */
+/* -------------------------------------------------------------------------- */
+
+@keyframes gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient 15s ease infinite;
+}
+
+@keyframes aurora {
+  from { background-position: 50% 50%, 50% 50%; }
+  to { background-position: 350% 50%, 350% 50%; }
+}
+
+.aurora-bg {
+  background-image:
+    radial-gradient(at 100% 100%, hsla(253, 16%, 7%, 1) 0, transparent 50%),
+    radial-gradient(at 0% 0%, hsla(225, 39%, 30%, 1) 0, transparent 50%);
+}
+
+.dark .aurora-bg {
+  background-image:
+    radial-gradient(at 100% 100%, hsla(253, 16%, 7%, 1) 0, transparent 50%),
+    radial-gradient(at 0% 0%, hsla(225, 39%, 30%, 1) 0, transparent 50%);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Custom Cursor Handling (Optional Magic UI Polish)                         */
+/* -------------------------------------------------------------------------- */
+
+/* Only hide cursor if you are using the Custom <SmoothCursor /> component */
+/* Otherwise, comment this out to keep the system cursor visible */
+/*
+* {
+  cursor: none !important;
+}
+input, textarea, [contenteditable="true"] {
+  cursor: text !important;
+}
+button, a {
+  cursor: pointer !important;
+}
+*/
+
+/* -------------------------------------------------------------------------- */
+/* Scrollbar Styling                                                         */
+/* -------------------------------------------------------------------------- */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-zinc-300 dark:bg-zinc-800 rounded-full 
+         hover:bg-zinc-400 dark:hover:bg-zinc-600 transition-colors;
+}
