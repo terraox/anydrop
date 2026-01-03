@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, File, X, Wifi, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import Ripple from '../../components/magicui/Ripple';
+import FileService from '../../services/file.service';
 
 export default function Orbit() {
   const [isDragging, setIsDragging] = useState(false);
@@ -28,22 +29,54 @@ export default function Orbit() {
     processFiles(e.target.files);
   };
 
-  const processFiles = (fileList) => {
-    const droppedFiles = Array.from(fileList).map(file => ({
-      id: Math.random().toString(36).substr(2, 9),
+
+
+  // ...
+
+  const processFiles = async (fileList) => {
+    const newFiles = Array.from(fileList).map(file => ({
+      id: Math.random().toString(36).substr(2, 9), // Temp ID until server responds
+      tempId: true, // Marker to replace with real ID
       name: file.name,
       size: (file.size / 1024 / 1024).toFixed(2) + ' MB',
       type: file.type.split('/')[1] || 'unknown',
-      status: 'sending'
+      status: 'uploading',
+      progress: 0,
+      fileObject: file // Keep reference for upload
     }));
 
-    setFiles(prev => [...prev, ...droppedFiles]);
-    toast.success(`${droppedFiles.length} files entered orbit`);
+    setFiles(prev => [...prev, ...newFiles]);
+    toast.info(`Initiating upload for ${newFiles.length} files...`);
 
-    // Simulate transfer completion
-    setTimeout(() => {
-      setFiles(prev => prev.map(f => ({ ...f, status: 'sent' })));
-    }, 3000);
+    // Upload each file
+    for (const fileData of newFiles) {
+      try {
+        await FileService.uploadFile(fileData.fileObject, (progress) => {
+          setFiles(prev => prev.map(f =>
+            f.id === fileData.id ? { ...f, progress } : f
+          ));
+        })
+          .then(response => {
+            // Success - Update with real data from server if available, or just mark sent
+            setFiles(prev => prev.map(f =>
+              f.id === fileData.id ? {
+                ...f,
+                status: 'sent',
+                progress: 100,
+                id: response.data?.id || f.id // Use real ID if returned
+              } : f
+            ));
+            toast.success(`${fileData.name} uploaded successfully!`);
+          });
+
+      } catch (error) {
+        console.error("Upload failed", error);
+        setFiles(prev => prev.map(f =>
+          f.id === fileData.id ? { ...f, status: 'error' } : f
+        ));
+        toast.error(`Failed to upload ${fileData.name}`);
+      }
+    }
   };
 
   const removeFile = (id) => {
@@ -125,14 +158,21 @@ export default function Orbit() {
           </span>
         </motion.button>
 
-        {/* Status Text */}
-        {/* Status Text */}
-        <div className="absolute top-[60%] text-center pointer-events-none select-none z-20">
-          <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white transition-colors">
-            {isDragging ? 'Portal Active' : 'Scanning Orbit...'}
-          </h2>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            {isDragging ? 'Release to beam files' : 'Drop files here or click core to upload'}
+        {/* Status Text - HUD Terminal Style */}
+        <div className="absolute bottom-12 flex flex-col items-center justify-center z-20 pointer-events-none select-none">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-3 px-4 py-2 rounded-full border border-zinc-200 dark:border-white/10 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md shadow-sm"
+          >
+            <div className={`w-2 h-2 rounded-full ${isDragging ? 'bg-violet-500 animate-ping' : 'bg-emerald-500 animate-pulse'}`} />
+            <span className="font-mono text-xs md:text-sm tracking-wider text-zinc-600 dark:text-zinc-300 uppercase">
+              {isDragging ? 'PORTAL_ACTIVE::READY_FOR_DROP' : 'SYSTEM_ONLINE::SCANNING_ORBIT'}
+            </span>
+          </motion.div>
+
+          <p className="mt-2 text-[10px] md:text-xs text-zinc-400 dark:text-zinc-500 tracking-wide">
+            {isDragging ? 'RELEASE TO INITIATE TRANSFER' : 'Upload or Drag File'}
           </p>
         </div>
       </div>
@@ -157,7 +197,17 @@ export default function Orbit() {
                 whileHover={{ scale: 1.05, zIndex: 50 }}
                 className="pointer-events-auto absolute left-1/2 top-1/2 -ml-32 -mt-10"
               >
-                <div className="w-64 backdrop-blur-xl bg-white/80 dark:bg-zinc-900/80 border border-zinc-200 dark:border-white/10 p-4 rounded-2xl shadow-xl flex items-center gap-4 group cursor-grab active:cursor-grabbing hover:shadow-2xl transition-shadow">
+                <div className="relative w-64 backdrop-blur-xl bg-white/80 dark:bg-zinc-900/80 border border-zinc-200 dark:border-white/10 p-4 rounded-2xl shadow-xl flex items-center gap-4 group cursor-grab active:cursor-grabbing hover:shadow-2xl transition-shadow">
+
+                  {/* Delete Badge */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeFile(file.id); }}
+                    className="absolute -top-2 -right-2 p-1 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-500 hover:bg-red-500 hover:text-white border-2 border-white dark:border-zinc-950 transition-colors shadow-sm"
+                    title="Remove file"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+
                   <div className="h-10 w-10 rounded-lg bg-violet-100 dark:bg-violet-500/10 flex items-center justify-center text-violet-600 dark:text-violet-500">
                     <File className="w-5 h-5" />
                   </div>
@@ -167,12 +217,6 @@ export default function Orbit() {
                       {file.size} • <span className={file.status === 'sent' ? 'text-emerald-500 font-medium' : 'text-violet-500 font-medium'}>{file.status === 'sent' ? 'Sent' : 'Uploading...'}</span>
                     </p>
                   </div>
-                  <button
-                    onClick={() => removeFile(file.id)}
-                    className="p-1.5 rounded-full hover:bg-red-100 dark:hover:bg-red-500/10 text-zinc-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
                 </div>
               </motion.div>
             );
