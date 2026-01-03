@@ -1,4 +1,4 @@
-import { User, Mail, Lock, Shield, LogOut, Monitor, Moon, Sun, Laptop, Camera, Key } from 'lucide-react';
+import { User, Mail, Lock, Shield, LogOut, Monitor, Moon, Sun, Laptop, Camera, Key, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
@@ -40,6 +40,14 @@ export default function Settings() {
         reader.readAsDataURL(file);
     };
 
+    const handleGenerateAvatar = (e) => {
+        e.stopPropagation();
+        const randomSeed = Math.random().toString(36).substring(7);
+        const diceBearUrl = `https://api.dicebear.com/7.x/adventurer/svg?seed=${randomSeed}`;
+        updateProfile({ avatar: diceBearUrl });
+        toast.success("New character generated!");
+    };
+
     const handleLogoutAll = () => {
         toast.error("Terminating all active sessions...");
         setTimeout(() => logout(), 1000);
@@ -64,19 +72,37 @@ export default function Settings() {
                     <div className="flex items-start gap-8">
                         {/* Glitch Avatar */}
                         <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
-                            <div className="w-24 h-24 rounded-2xl bg-gradient-to-tr from-violet-500 to-fuchsia-600 flex items-center justify-center text-3xl font-bold text-white shadow-xl overflow-hidden">
+                            <div className="w-24 h-24 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shadow-xl overflow-hidden ring-4 ring-white dark:ring-zinc-900 border border-zinc-200 dark:border-zinc-700">
                                 {user?.avatar ? (
-                                    <img src={user.avatar} className="w-full h-full object-cover" alt="Profile" />
+                                    <img
+                                        src={user.avatar}
+                                        alt="Avatar"
+                                        className="w-full h-full object-cover"
+                                    />
                                 ) : (
-                                    <span>{user?.email?.charAt(0).toUpperCase() || 'U'}</span>
+                                    <img
+                                        src={`https://api.dicebear.com/7.x/adventurer/svg?seed=${user?.username || 'User'}`}
+                                        alt="Generated Avatar"
+                                        className="w-full h-full object-cover"
+                                    />
                                 )}
-                                <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors" />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
                             </div>
-                            {/* Glitch Overlay (Pseudo) */}
-                            <div className="absolute inset-0 rounded-2xl bg-violet-500 mix-blend-screen opacity-0 group-hover:animate-pulse group-hover:opacity-30 transition-opacity" />
-                            <div className="absolute -bottom-2 -right-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider flex items-center gap-1">
-                                <Camera className="w-3 h-3" /> EDIT
+
+                            {/* Actions */}
+                            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 flex gap-2">
+                                <div className="bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider flex items-center gap-1 shadow-lg cursor-pointer hover:scale-105 transition-transform" title="Upload Image">
+                                    <Camera className="w-3 h-3" />
+                                </div>
+                                <div
+                                    onClick={handleGenerateAvatar}
+                                    className="bg-violet-600 text-white px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider flex items-center gap-1 shadow-lg cursor-pointer hover:bg-violet-500 hover:scale-105 transition-all"
+                                    title="Generate Avatar"
+                                >
+                                    <RefreshCw className="w-3 h-3" />
+                                </div>
                             </div>
+
                             <input
                                 type="file"
                                 ref={fileInputRef}
