@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import { Toaster } from 'sonner';
+import CommandPalette from '../components/ui/CommandPalette';
 
 export default function DashboardLayout() {
   return (
@@ -28,6 +29,7 @@ export default function DashboardLayout() {
 
       {/* Global Toasts */}
       <Toaster position="bottom-right" theme="system" />
+      <CommandPalette />
     </div>
   );
 }

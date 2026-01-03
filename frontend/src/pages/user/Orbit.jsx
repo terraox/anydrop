@@ -107,6 +107,25 @@ export default function Orbit() {
     fileInputRef.current?.click();
   };
 
+  // --- VISUAL EFFECTS ---
+  const portalVariants = {
+    idle: { scale: 0.8, opacity: 0 },
+    dragging: {
+      scale: 1.2,
+      opacity: 1,
+      transition: {
+        type: "spring",
+        stiffness: 100,
+        damping: 10
+      }
+    },
+    dropping: {
+      scale: 0.1,
+      opacity: 0,
+      transition: { duration: 0.3, ease: "backIn" }
+    }
+  };
+
   return (
     <div
       className="relative h-full w-full flex items-center justify-center min-h-[80vh] overflow-hidden"
@@ -140,13 +159,23 @@ export default function Orbit() {
         <AnimatePresence>
           {isDragging && (
             <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1.2, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }}
-              className="absolute inset-0 flex items-center justify-center pointer-events-none"
+              variants={portalVariants}
+              initial="idle"
+              animate="dragging"
+              exit="dropping"
+              className="absolute inset-0 flex items-center justify-center pointer-events-none z-0"
             >
-              <div className="w-[500px] h-[500px] rounded-full border-2 border-dashed border-violet-500/50 bg-violet-500/5 animate-spin-slow" />
-              <div className="absolute w-[350px] h-[350px] rounded-full border-4 border-violet-500/30 animate-ping" />
+              {/* Outer Horizon */}
+              <div className="w-[600px] h-[600px] rounded-full border border-violet-500/30 bg-violet-500/5 animate-spin-slow blur-3xl opacity-50" />
+
+              {/* Event Horizon */}
+              <div className="absolute w-[450px] h-[450px] rounded-full border-2 border-dashed border-violet-500/50 animate-reverse-spin" />
+
+              {/* Accretion Disk */}
+              <div className="absolute w-[350px] h-[350px] rounded-full border-4 border-violet-500/40 animate-ping opacity-20" />
+
+              {/* Singularity Pull */}
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(139,92,246,0.3)_0%,transparent_60%)] animate-pulse" />
             </motion.div>
           )}
         </AnimatePresence>
@@ -164,7 +193,7 @@ export default function Orbit() {
                 border-4 border-white/50 dark:border-white/10
                 shadow-[20px_20px_60px_rgba(0,0,0,0.1),-20px_-20px_60px_rgba(255,255,255,0.5)]
                 dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)]
-                ${isDragging ? 'ring-4 ring-violet-500/50 shadow-[0_0_80px_rgba(139,92,246,0.6)]' : ''}
+                ${isDragging ? 'ring-4 ring-violet-500/50 shadow-[0_0_80px_rgba(139,92,246,0.8)] scale-110' : ''}
             `}
         >
           <div className={`absolute inset-0 rounded-full transition-all duration-1000 ${isDragging ? 'bg-violet-500/10 animate-pulse' : 'bg-transparent'}`} />
