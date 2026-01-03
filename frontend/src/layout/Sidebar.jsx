@@ -34,14 +34,8 @@ export default function Sidebar() {
 
       {/* Brand Header */}
       <div className="h-16 flex items-center px-6 border-b border-zinc-200/50 dark:border-white/5">
-        <Link to="/" className="flex items-center gap-2 group">
-          <div className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 text-white shadow-lg shadow-violet-500/20 group-hover:scale-105 transition-transform">
-            <Radar className="w-5 h-5 animate-spin-slow" />
-            <div className="absolute inset-0 rounded-lg bg-violet-600 blur opacity-40 group-hover:opacity-60 transition-opacity" />
-          </div>
-          <span className="text-xl font-bold tracking-tight text-zinc-900 dark:text-white">
-            Any<span className="text-violet-500">Drop</span>
-          </span>
+        <Link to="/" className="flex items-center gap-2 group hover:scale-105 transition-transform duration-300">
+          <Logo />
         </Link>
       </div>
 
@@ -94,7 +88,7 @@ export default function Sidebar() {
               Unlock 10GB transfers and Warp Speed.
             </p>
 
-            <Link to="/pricing">
+            <Link to="/checkout">
               <ShimmerButton className="w-full py-2 text-xs font-bold text-center" shimmerColor="#8B5CF6">
                 UPGRADE PRO
               </ShimmerButton>

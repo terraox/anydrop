@@ -24,7 +24,7 @@ export default function Devices() {
     };
 
     return (
-        <div className="p-6 max-w-6xl mx-auto space-y-8">
+        <div className="p-6 w-full space-y-8">
 
             <div className="flex flex-col gap-2">
                 <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">Command Center</h1>
@@ -94,8 +94,8 @@ export default function Devices() {
                                 <button
                                     onClick={toggleSentry}
                                     className={`flex items-center justify-center gap-2 p-3 rounded-xl transition-colors text-sm font-medium border ${sentryMode
-                                            ? 'bg-red-500/10 border-red-500 text-red-500'
-                                            : 'bg-zinc-100 dark:bg-zinc-800 border-transparent hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white'
+                                        ? 'bg-red-500/10 border-red-500 text-red-500'
+                                        : 'bg-zinc-100 dark:bg-zinc-800 border-transparent hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white'
                                         }`}
                                 >
                                     <ShieldAlert className="w-4 h-4" /> Sentry

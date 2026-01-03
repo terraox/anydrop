@@ -24,13 +24,8 @@ export default function Navbar() {
     return (
         <>
             <header className="flex h-16 items-center justify-between border-b border-zinc-200/50 bg-white/80 px-4 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/80 sticky top-0 z-50">
-                <Link to="/" className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 text-white shadow-lg shadow-violet-500/20">
-                        <Radar className="w-5 h-5 animate-spin-slow" />
-                    </div>
-                    <span className="text-xl font-bold tracking-tight text-zinc-900 dark:text-white">
-                        Any<span className="text-violet-500">Drop</span>
-                    </span>
+                <Link to="/" className="flex items-center gap-2 hover:scale-105 transition-transform duration-300">
+                    <Logo />
                 </Link>
                 <div className="flex items-center gap-2">
                     <ThemeToggle />
@@ -82,7 +77,7 @@ export default function Navbar() {
                                     <p className="text-sm text-zinc-400 mb-4 leading-relaxed">
                                         Unlock 10GB transfers.
                                     </p>
-                                    <Link to="/pricing" onClick={() => setIsOpen(false)}>
+                                    <Link to="/checkout" onClick={() => setIsOpen(false)}>
                                         <ShimmerButton className="w-full py-2 text-xs font-bold text-center" shimmerColor="#8B5CF6">
                                             UPGRADE PRO
                                         </ShimmerButton>

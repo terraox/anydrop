@@ -14,6 +14,7 @@ import Orbit from './pages/user/Orbit';
 import History from './pages/user/History';
 import Devices from './pages/user/Devices';
 import Pricing from './pages/user/Pricing';
+import Checkout from './pages/user/Checkout';
 import Settings from './pages/user/Settings';
 
 // Admin Pages
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="history" element={<History />} />
           <Route path="devices" element={<Devices />} />
           <Route path="pricing" element={<Pricing />} />
+          <Route path="checkout" element={<Checkout />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 
