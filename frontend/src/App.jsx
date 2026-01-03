@@ -41,6 +41,8 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
   return children;
 };
 
+
+
 export default function App() {
   return (
     <>

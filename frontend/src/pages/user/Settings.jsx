@@ -1,9 +1,42 @@
-import { User, Mail, Lock, Shield, LogOut, Monitor, Moon, Sun, Laptop, Camera, Key, RefreshCw } from 'lucide-react';
+import { User, Mail, Lock, Shield, LogOut, Monitor, Moon, Sun, Laptop, Camera, Key, RefreshCw, LayoutGrid } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import ChangePasswordModal from '../../components/user/ChangePasswordModal';
 import { useState, useRef } from 'react';
+
+
+const DashboardViewToggle = () => {
+    const [viewMode, setViewMode] = useState(() => localStorage.getItem('orbit_view_mode') || 'classic');
+
+    return (
+        <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-200 dark:bg-zinc-900 rounded-lg">
+            {['classic', 'bento'].map((mode) => {
+                const isActive = viewMode === mode;
+                return (
+                    <button
+                        key={mode}
+                        onClick={() => {
+                            setViewMode(mode);
+                            localStorage.setItem('orbit_view_mode', mode);
+                            window.dispatchEvent(new Event('orbit-view-change'));
+                            toast.success(`Active View: ${mode === 'classic' ? 'Classic Orbit' : 'Bento Grid'}`);
+                        }}
+                        className={`
+                            px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wide transition-all duration-200
+                            ${isActive
+                                ? 'bg-white dark:bg-zinc-800 text-violet-600 dark:text-violet-400 shadow-sm'
+                                : 'text-zinc-500 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300'
+                            }
+                        `}
+                    >
+                        {mode === 'classic' ? 'Orbit' : 'Bento'}
+                    </button>
+                );
+            })}
+        </div>
+    );
+};
 
 export default function Settings() {
     const { user, logout, updateProfile, changePassword } = useAuth();
@@ -168,24 +201,47 @@ export default function Settings() {
                     <h2 className="text-lg font-semibold text-zinc-900 dark:text-white border-b border-zinc-200 dark:border-zinc-800 pb-2">
                         Appearance
                     </h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        {[
-                            { name: 'light', icon: Sun, label: 'Light' },
-                            { name: 'dark', icon: Moon, label: 'Dark' },
-                            { name: 'system', icon: Laptop, label: 'System' }
-                        ].map((mode) => (
-                            <button
-                                key={mode.name}
-                                onClick={() => setTheme(mode.name)}
-                                className={`flex flex-col items-center gap-3 p-4 rounded-xl border transition-all ${theme === mode.name
-                                    ? 'border-violet-500 bg-violet-500/5 text-violet-600 dark:text-violet-400'
-                                    : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 text-zinc-500'
-                                    }`}
-                            >
-                                <mode.icon className="w-6 h-6" />
-                                <span className="text-sm font-medium">{mode.label}</span>
-                            </button>
-                        ))}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                        {/* Theme Toggle */}
+                        <div className="p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 space-y-4">
+                            <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
+                                {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+                                <span className="font-medium">Interface Theme</span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2">
+                                {['light', 'dark', 'system'].map((t) => (
+                                    <button
+                                        key={t}
+                                        onClick={() => setTheme(t)}
+                                        className={`
+                                            px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all duration-300
+                                            ${theme === t
+                                                ? 'bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white shadow-sm'
+                                                : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                                            }
+                                        `}
+                                    >
+                                        {t}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* View Mode Toggle */}
+                        <div className="p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 space-y-4">
+                            <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
+                                <LayoutGrid className="w-4 h-4" />
+                                <span className="font-medium">Dashboard View</span>
+                            </div>
+
+                            <DashboardViewToggle />
+                            <p className="text-[10px] text-zinc-400 leading-tight">
+                                Select "Orbit" for the classic radar view or "Bento" for a data-rich grid layout.
+                            </p>
+                        </div>
+
                     </div>
                 </section>
 

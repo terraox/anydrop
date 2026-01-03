@@ -30,7 +30,7 @@ export default function Sidebar() {
   const isPro = user?.plan === 'PRO';
 
   return (
-    <aside className="hidden md:flex w-64 flex-col border-r border-zinc-200 dark:border-white/10 bg-white/50 dark:bg-zinc-950/80 backdrop-blur-xl h-screen z-40">
+    <aside className="hidden md:flex w-64 flex-col border-r border-zinc-200/50 dark:border-white/5 bg-white/40 dark:bg-zinc-950/40 backdrop-blur-2xl h-screen z-40 supports-[backdrop-filter]:bg-white/20">
 
       {/* Brand Header */}
       <div className="h-16 flex items-center px-6 border-b border-zinc-200/50 dark:border-white/5">
