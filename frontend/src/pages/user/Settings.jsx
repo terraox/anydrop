@@ -1,12 +1,44 @@
-import React from 'react';
-import { User, Mail, Lock, Shield, LogOut, Monitor, Moon, Sun, Laptop } from 'lucide-react';
+import { User, Mail, Lock, Shield, LogOut, Monitor, Moon, Sun, Laptop, Camera, Key } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
+import ChangePasswordModal from '../../components/user/ChangePasswordModal';
+import { useState, useRef } from 'react';
 
 export default function Settings() {
-    const { user, logout } = useAuth();
+    const { user, logout, updateProfile, changePassword } = useAuth();
     const { theme, setTheme } = useTheme();
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const fileInputRef = useRef(null);
+
+    const handleAvatarClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        // Validation
+        if (!file.type.startsWith('image/')) {
+            toast.error("Please upload an image file.");
+            return;
+        }
+        if (file.size > 2 * 1024 * 1024) { // 2MB limit
+            toast.error("Image size should be less than 2MB.");
+            return;
+        }
+
+        // Simulating upload by converting to Base64
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const base64String = reader.result;
+            // Optimistic update
+            updateProfile({ avatar: base64String });
+            toast.success("Avatar updated successfully!");
+        };
+        reader.readAsDataURL(file);
+    };
 
     const handleLogoutAll = () => {
         toast.error("Terminating all active sessions...");
@@ -31,7 +63,7 @@ export default function Settings() {
 
                     <div className="flex items-start gap-8">
                         {/* Glitch Avatar */}
-                        <div className="relative group cursor-pointer">
+                        <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
                             <div className="w-24 h-24 rounded-2xl bg-gradient-to-tr from-violet-500 to-fuchsia-600 flex items-center justify-center text-3xl font-bold text-white shadow-xl overflow-hidden">
                                 {user?.avatar ? (
                                     <img src={user.avatar} className="w-full h-full object-cover" alt="Profile" />
@@ -42,9 +74,16 @@ export default function Settings() {
                             </div>
                             {/* Glitch Overlay (Pseudo) */}
                             <div className="absolute inset-0 rounded-2xl bg-violet-500 mix-blend-screen opacity-0 group-hover:animate-pulse group-hover:opacity-30 transition-opacity" />
-                            <div className="absolute -bottom-2 -right-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider">
-                                EDIT
+                            <div className="absolute -bottom-2 -right-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider flex items-center gap-1">
+                                <Camera className="w-3 h-3" /> EDIT
                             </div>
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                className="hidden"
+                                accept="image/*"
+                                onChange={handleFileChange}
+                            />
                         </div>
 
                         <div className="flex-1 space-y-4 max-w-md">
@@ -72,6 +111,29 @@ export default function Settings() {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </section>
+
+                {/* Security */}
+                <section className="space-y-6">
+                    <h2 className="text-lg font-semibold text-zinc-900 dark:text-white border-b border-zinc-200 dark:border-zinc-800 pb-2">
+                        Security
+                    </h2>
+                    <div className="p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 flex items-center justify-between gap-6">
+                        <div>
+                            <h3 className="font-semibold text-zinc-900 dark:text-white flex items-center gap-2">
+                                <Key className="w-4 h-4 text-violet-500" /> Password
+                            </h3>
+                            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                                Change your password periodically to keep your account secure.
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => setIsPasswordModalOpen(true)}
+                            className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white text-sm font-semibold rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all"
+                        >
+                            Change Password
+                        </button>
                     </div>
                 </section>
 
@@ -124,6 +186,13 @@ export default function Settings() {
                 </section>
 
             </div>
-        </div>
+
+
+            <ChangePasswordModal
+                isOpen={isPasswordModalOpen}
+                onClose={() => setIsPasswordModalOpen(false)}
+                onChangePassword={changePassword}
+            />
+        </div >
     );
 }
