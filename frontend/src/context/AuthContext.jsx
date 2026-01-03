@@ -13,29 +13,43 @@ export const AuthProvider = ({ children }) => {
     const savedRole = localStorage.getItem('anydrop_user_role');
     const savedEmail = localStorage.getItem('anydrop_user_email');
     const savedPlan = localStorage.getItem('anydrop_user_plan');
+    
+    // NEW: Load Identity fields
+    const savedUsername = localStorage.getItem('anydrop_user_username');
+    const savedAvatar = localStorage.getItem('anydrop_user_avatar');
 
     if (savedToken && savedEmail) {
       setToken(savedToken);
       setUser({
         email: savedEmail,
         role: savedRole,
-        plan: savedPlan
+        plan: savedPlan,
+        username: savedUsername, // Gamertag support
+        avatar: savedAvatar      // Pixel Art Avatar support
       });
     }
     setLoading(false);
   }, []);
 
-  const login = (authToken, userEmail, userRole, userPlan) => {
+  const login = (authToken, userData) => {
+    // userData expects: { email, role, plan, username, avatar }
+    
     localStorage.setItem('anydrop_auth_token', authToken);
-    localStorage.setItem('anydrop_user_email', userEmail);
-    localStorage.setItem('anydrop_user_role', userRole);
-    localStorage.setItem('anydrop_user_plan', userPlan || 'FREE');
+    localStorage.setItem('anydrop_user_email', userData.email);
+    localStorage.setItem('anydrop_user_role', userData.role);
+    localStorage.setItem('anydrop_user_plan', userData.plan || 'FREE');
+    
+    // NEW: Save Identity
+    localStorage.setItem('anydrop_user_username', userData.username);
+    localStorage.setItem('anydrop_user_avatar', userData.avatar);
     
     setToken(authToken);
     setUser({
-      email: userEmail,
-      role: userRole,
-      plan: userPlan || 'FREE'
+      email: userData.email,
+      role: userData.role,
+      plan: userData.plan || 'FREE',
+      username: userData.username,
+      avatar: userData.avatar
     });
   };
 
@@ -44,6 +58,11 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('anydrop_user_email');
     localStorage.removeItem('anydrop_user_role');
     localStorage.removeItem('anydrop_user_plan');
+    
+    // NEW: Clear Identity
+    localStorage.removeItem('anydrop_user_username');
+    localStorage.removeItem('anydrop_user_avatar');
+    
     setToken(null);
     setUser(null);
   };

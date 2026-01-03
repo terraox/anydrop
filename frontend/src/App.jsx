@@ -1,34 +1,80 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import React from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
+
+import DashboardLayout from './layout/DashboardLayout';
+import AdminLayout from './layout/AdminLayout';
+
+// Auth Pages
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 
-function App() {
-    return (
-        <Router>
-            <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/" element={
-                    <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-                        <div className="text-center">
-                            <h1 className="text-4xl font-bold text-gradient mb-4">Project Pup</h1>
-                            <p className="text-lg text-zinc-500 dark:text-zinc-400 mb-6">
-                                Welcome to your app! 🐕
-                            </p>
-                            <div className="flex gap-4 justify-center">
-                                <a href="/login" className="px-6 py-2.5 rounded-lg bg-zinc-900 text-white font-medium hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200 transition-colors">
-                                    Login
-                                </a>
-                                <a href="/register" className="px-6 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
-                                    Register
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                } />
-            </Routes>
-        </Router>
-    );
-}
+// User Pages
+import Orbit from './pages/user/Orbit';
+import History from './pages/user/History';
+import Devices from './pages/user/Devices';
+import Pricing from './pages/user/Pricing';
+import Settings from './pages/user/Settings';
 
-export default App;
+// Admin Pages
+import AdminDashboard from './pages/admin/AdminDashboard';
+
+// --- Protected Route Wrapper ---
+const ProtectedRoute = ({ children, requireAdmin = false }) => {
+  const { isAuthenticated, loading, user } = useAuth(); // Assuming user object has role
+  const location = useLocation();
+
+  if (loading) return (
+    <div className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center text-zinc-900 dark:text-white">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+    </div>
+  );
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // NOTE: In a real app, check user.role here for Admin routes
+  // for now we just allow access if authenticated
+
+  return children;
+};
+
+export default function App() {
+  return (
+    <>
+      <Routes>
+        {/* --- Public Routes --- */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<div>Forgot Password Page</div>} />
+
+        {/* --- User Dashboard Routes --- */}
+        <Route path="/" element={
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }>
+          <Route index element={<Orbit />} />
+          <Route path="history" element={<History />} />
+          <Route path="devices" element={<Devices />} />
+          <Route path="pricing" element={<Pricing />} />
+          <Route path="settings" element={<Settings />} />
+        </Route>
+
+        {/* --- Admin Routes --- */}
+        <Route path="/admin" element={
+          <ProtectedRoute requireAdmin={true}>
+            <AdminLayout />
+          </ProtectedRoute>
+        }>
+          <Route index element={<AdminDashboard />} />
+          {/* Add more admin routes here like /admin/users if needed */}
+        </Route>
+
+        {/* Catch all */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
+  );
+}
