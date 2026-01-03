@@ -1,9 +1,61 @@
-import { User, Mail, Lock, Shield, LogOut, Monitor, Moon, Sun, Laptop, Camera, Key, RefreshCw, LayoutGrid } from 'lucide-react';
+import { User, Mail, Lock, Shield, LogOut, Monitor, Moon, Sun, Laptop, Camera, Key, RefreshCw, LayoutGrid, Volume2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import ChangePasswordModal from '../../components/user/ChangePasswordModal';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useSoundEffects } from '../../hooks/useSoundEffects';
+
+
+const SoundEffectsToggle = () => {
+    const { toggleSoundEffects, getSoundEnabled, playUploadSuccess } = useSoundEffects();
+    const [enabled, setEnabled] = useState(true);
+
+    useEffect(() => {
+        setEnabled(getSoundEnabled());
+    }, [getSoundEnabled]);
+
+    const handleToggle = () => {
+        const newValue = !enabled;
+        setEnabled(newValue);
+        toggleSoundEffects(newValue);
+        if (newValue) {
+            playUploadSuccess(); // Play a test sound
+        }
+        toast.success(`Sound Effects ${newValue ? 'Enabled' : 'Disabled'}`);
+    };
+
+    return (
+        <div className="p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 space-y-4">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
+                    <Volume2 className="w-4 h-4" />
+                    <span className="font-medium">Sound Effects</span>
+                </div>
+                <button
+                    onClick={handleToggle}
+                    className={`
+                        relative w-11 h-6 rounded-full transition-all duration-300
+                        ${enabled
+                            ? 'bg-violet-500'
+                            : 'bg-zinc-300 dark:bg-zinc-700'
+                        }
+                    `}
+                >
+                    <span
+                        className={`
+                            absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300
+                            ${enabled ? 'translate-x-5' : 'translate-x-0'}
+                        `}
+                    />
+                </button>
+            </div>
+            <p className="text-[10px] text-zinc-400 leading-tight">
+                Play audio feedback on successful uploads and downloads.
+            </p>
+        </div>
+    );
+};
 
 
 const DashboardViewToggle = () => {
@@ -241,6 +293,9 @@ export default function Settings() {
                                 Select "Orbit" for the classic radar view or "Bento" for a data-rich grid layout.
                             </p>
                         </div>
+
+                        {/* Sound Effects Toggle */}
+                        <SoundEffectsToggle />
 
                     </div>
                 </section>

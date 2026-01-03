@@ -6,9 +6,12 @@ import FileService from '../../services/file.service';
 import Logo from '../../components/ui/Logo';
 import GlassCard from '../../components/ui/GlassCard';
 import FileUpload from '../../components/ui/FileUpload';
+import { fireSideCannons } from '../../components/magicui/Confetti';
+import { useSoundEffects } from '../../hooks/useSoundEffects';
 
 export default function BentoOrbit() {
     const [files, setFiles] = useState([]);
+    const { playUploadStart, playUploadSuccess, playUploadError } = useSoundEffects();
 
     React.useEffect(() => {
         document.title = "AnyDrop";
@@ -48,6 +51,7 @@ export default function BentoOrbit() {
 
         setFiles(prev => [...prev, ...newFiles]);
         toast.info(`Initiating upload for ${newFiles.length} files...`);
+        playUploadStart(); // 🔊 Start sound
 
         for (const fileData of newFiles) {
             try {
@@ -66,6 +70,8 @@ export default function BentoOrbit() {
                             } : f
                         ));
                         toast.success(`${fileData.name} uploaded successfully!`);
+                        fireSideCannons(); // 🎉 Celebration!
+                        playUploadSuccess(); // 🔊 Success sound
                     });
 
             } catch (error) {
@@ -74,6 +80,7 @@ export default function BentoOrbit() {
                     f.id === fileData.id ? { ...f, status: 'error' } : f
                 ));
                 toast.error(`Failed to upload ${fileData.name}`);
+                playUploadError(); // 🔊 Error sound
             }
         }
     };

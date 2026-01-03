@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -15,19 +15,42 @@ import { useAuth } from '../context/AuthContext';
 import Logo from '../components/ui/Logo';
 import ShimmerButton from '../components/magicui/ShimmerButton';
 import ThemeToggle from '../components/ui/ThemeToggle';
-
-const navItems = [
-  { icon: LayoutGrid, label: 'Orbit', path: '/' },
-  { icon: History, label: 'History', path: '/history' },
-  { icon: Smartphone, label: 'Devices', path: '/devices' },
-  { icon: CreditCard, label: 'Pricing', path: '/pricing' },
-  { icon: Settings, label: 'Settings', path: '/settings' },
-];
+import { useTheme } from 'next-themes';
 
 export default function Sidebar() {
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { theme, resolvedTheme } = useTheme();
   const isPro = user?.plan === 'PRO';
+
+  // Dynamic view mode state
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('orbit_view_mode') || 'classic');
+
+  useEffect(() => {
+    const handleViewChange = () => {
+      setViewMode(localStorage.getItem('orbit_view_mode') || 'classic');
+    };
+    window.addEventListener('orbit-view-change', handleViewChange);
+    return () => window.removeEventListener('orbit-view-change', handleViewChange);
+  }, []);
+
+  // Dynamic nav items based on view mode
+  const navItems = [
+    {
+      icon: viewMode === 'bento' ? LayoutGrid : Radar,
+      label: viewMode === 'bento' ? 'Bento' : 'Orbit',
+      path: '/'
+    },
+    { icon: History, label: 'History', path: '/history' },
+    { icon: Smartphone, label: 'Devices', path: '/devices' },
+    { icon: CreditCard, label: 'Pricing', path: '/pricing' },
+    { icon: Settings, label: 'Settings', path: '/settings' },
+  ];
+
+  // Determine button background based on theme
+  const buttonBackground = resolvedTheme === 'dark'
+    ? 'rgba(0, 0, 0, 1)' // Black in dark mode
+    : 'rgba(255, 255, 255, 1)'; // White in light mode
 
   return (
     <aside className="hidden md:flex w-64 flex-col border-r border-zinc-200/50 dark:border-white/5 bg-white/40 dark:bg-zinc-950/40 backdrop-blur-2xl h-screen z-40 supports-[backdrop-filter]:bg-white/20">
@@ -76,20 +99,24 @@ export default function Sidebar() {
       <div className="p-4 border-t border-zinc-200/50 dark:border-white/5 space-y-4">
 
         {!isPro && (
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-black p-5 text-white shadow-xl ring-1 ring-white/10 group">
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-black dark:from-white dark:via-zinc-50 dark:to-zinc-100 p-5 text-white dark:text-zinc-900 shadow-xl ring-1 ring-white/10 dark:ring-black/5 group">
             <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-violet-500/20 blur-3xl rounded-full group-hover:bg-violet-500/30 transition-colors"></div>
 
-            <div className="flex items-center gap-2 mb-2 text-violet-400">
+            <div className="flex items-center gap-2 mb-2 text-violet-400 dark:text-violet-600">
               <Zap className="w-4 h-4 fill-current animate-pulse" />
               <span className="text-xs font-bold tracking-wider uppercase">Free Plan</span>
             </div>
 
-            <p className="text-sm text-zinc-400 mb-4 leading-relaxed">
+            <p className="text-sm text-zinc-400 dark:text-zinc-500 mb-4 leading-relaxed">
               Unlock 10GB transfers and Warp Speed.
             </p>
 
             <Link to="/checkout">
-              <ShimmerButton className="w-full py-2 text-xs font-bold text-center" shimmerColor="#8B5CF6">
+              <ShimmerButton
+                className={`w-full py-2 text-xs font-bold text-center ${resolvedTheme === 'dark' ? 'text-white' : 'text-zinc-900'}`}
+                shimmerColor="#8B5CF6"
+                background={buttonBackground}
+              >
                 UPGRADE PRO
               </ShimmerButton>
             </Link>
