@@ -210,7 +210,7 @@ export default function Orbit() {
         </motion.button>
 
         {/* Status Text - HUD Terminal Style */}
-        <div className="absolute bottom-12 flex flex-col items-center justify-center z-20 select-none">
+        <div className="absolute top-16 md:top-20 flex flex-col items-center justify-center z-20 select-none">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

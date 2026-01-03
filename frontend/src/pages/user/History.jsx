@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { File, Copy, CheckCircle, XCircle, Globe, Hash, Type } from 'lucide-react';
 import { toast } from 'sonner';
 import MagicCard from '../../components/magicui/MagicCard';
+import FluidGauge from '../../components/ui/FluidGauge';
 
 const TABS = [
   { id: 'files', label: 'File Log' },
@@ -64,6 +65,35 @@ export default function History() {
         </div>
       </div>
 
+      {/* VISUAL STATS ROW */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <FluidGauge value={42} max={100} label="Storage Used" color="#8B5CF6" />
+
+        {/* Stat Card 2 */}
+        <div className="relative w-full h-64 bg-white/50 dark:bg-zinc-900/40 backdrop-blur-xl border border-zinc-200 dark:border-white/5 rounded-2xl p-6 flex flex-col justify-between group overflow-hidden">
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Total Transferred</h3>
+            <p className="text-3xl font-bold text-zinc-900 dark:text-white mt-1">1,240 <span className="text-base font-normal text-zinc-500">Files</span></p>
+          </div>
+          <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <File className="w-48 h-48 text-violet-500" />
+          </div>
+        </div>
+
+        {/* Stat Card 3 */}
+        <div className="relative w-full h-64 bg-white/50 dark:bg-zinc-900/40 backdrop-blur-xl border border-zinc-200 dark:border-white/5 rounded-2xl p-6 flex flex-col justify-between group overflow-hidden">
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Plan Status</h3>
+            <p className="text-3xl font-bold text-emerald-500 mt-1">Active</p>
+          </div>
+          <div className="absolute right-6 bottom-6">
+            <div className="w-16 h-16 rounded-full border-4 border-emerald-500/20 flex items-center justify-center">
+              <CheckCircle className="w-8 h-8 text-emerald-500" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Content Area */}
       <AnimatePresence mode="wait">
 
@@ -97,8 +127,8 @@ export default function History() {
                   <div className="hidden md:block col-span-2 text-zinc-500 text-sm">{file.device}</div>
                   <div className="col-span-2">
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${file.status === 'success'
-                        ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                        : 'bg-red-500/10 text-red-600 border-red-500/20'
+                      ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                      : 'bg-red-500/10 text-red-600 border-red-500/20'
                       }`}>
                       {file.status === 'success' ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
                       {file.status === 'success' ? 'Sent' : 'Failed'}
@@ -130,8 +160,8 @@ export default function History() {
                 <div className="p-6 relative z-20 h-full flex flex-col">
                   <div className="flex items-center justify-between mb-4">
                     <div className={`p-2 rounded-lg ${item.type === 'hex' ? 'bg-zinc-100 dark:bg-zinc-800' :
-                        item.type === 'link' ? 'bg-blue-500/10 text-blue-500' :
-                          'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'
+                      item.type === 'link' ? 'bg-blue-500/10 text-blue-500' :
+                        'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'
                       }`}>
                       {item.type === 'hex' && <div className="w-4 h-4 rounded-full" style={{ backgroundColor: item.content }} />}
                       {item.type === 'link' && <Globe className="w-4 h-4" />}

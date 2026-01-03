@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import { Toaster } from 'sonner';
 import CommandPalette from '../components/ui/CommandPalette';
+import Dock from '../components/ui/Dock';
 
 export default function DashboardLayout() {
   return (
@@ -29,7 +30,11 @@ export default function DashboardLayout() {
 
       {/* Global Toasts */}
       <Toaster position="bottom-right" theme="system" />
+      <Toaster position="bottom-right" theme="system" />
       <CommandPalette />
+      <div className="hidden md:block">
+        <Dock />
+      </div>
     </div>
   );
 }
