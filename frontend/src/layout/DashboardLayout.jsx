@@ -1,12 +1,17 @@
 import React from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import { Toaster } from 'sonner';
 import CommandPalette from '../components/ui/CommandPalette';
 import Dock from '../components/ui/Dock';
 
+
+import { AnimatePresence } from 'framer-motion';
+import PageTransition from '../components/ui/PageTransition';
+
 export default function DashboardLayout() {
+  const location = useLocation();
   return (
     <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans selection:bg-violet-500/30">
 
@@ -23,7 +28,9 @@ export default function DashboardLayout() {
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth">
-          <Outlet />
+          <PageTransition key={location.pathname} className="h-full w-full">
+            <Outlet />
+          </PageTransition>
         </main>
 
       </div>
