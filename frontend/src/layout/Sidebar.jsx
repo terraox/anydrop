@@ -9,7 +9,8 @@ import {
   Settings,
   LogOut,
   Zap,
-  Radar
+  Radar,
+  ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Logo from '../components/ui/Logo';
@@ -121,6 +122,17 @@ export default function Sidebar() {
               </ShimmerButton>
             </Link>
           </div>
+        )}
+
+        {/* Admin Panel Link - Only for Admins */}
+        {user?.role === 'ADMIN' && (
+          <Link
+            to="/admin/dashboard"
+            className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-500/20 transition-all group"
+          >
+            <ShieldCheck className="h-4 w-4" />
+            <span>Admin Panel</span>
+          </Link>
         )}
 
         {/* User Profile Row */}

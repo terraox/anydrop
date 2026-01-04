@@ -18,11 +18,18 @@ import Checkout from './pages/user/Checkout';
 import Settings from './pages/user/Settings';
 
 // Admin Pages
+import AdminLogin from './pages/admin/AdminLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminUsers from './pages/admin/Users';
+import AdminFiles from './pages/admin/Files';
+import AdminPlans from './pages/admin/Plans';
+import AdminCoupons from './pages/admin/Coupons';
+import AdminTransactions from './pages/admin/Transactions';
+import AdminSystemHealth from './pages/admin/SystemHealth';
 
 // --- Protected Route Wrapper ---
 const ProtectedRoute = ({ children, requireAdmin = false }) => {
-  const { isAuthenticated, loading, user } = useAuth(); // Assuming user object has role
+  const { isAuthenticated, loading, user } = useAuth();
   const location = useLocation();
 
   if (loading) return (
@@ -32,11 +39,15 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
   );
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    // Redirect to appropriate login page
+    const loginPath = requireAdmin ? '/admin' : '/login';
+    return <Navigate to={loginPath} state={{ from: location }} replace />;
   }
 
-  // NOTE: In a real app, check user.role here for Admin routes
-  // for now we just allow access if authenticated
+  // Check admin role for admin routes
+  if (requireAdmin && user?.role !== 'ADMIN') {
+    return <Navigate to="/" replace />;
+  }
 
   return children;
 };
@@ -52,6 +63,9 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<div>Forgot Password Page</div>} />
 
+        {/* --- Admin Login (Public) --- */}
+        <Route path="/admin" element={<AdminLogin />} />
+
         {/* --- User Dashboard Routes --- */}
         <Route path="/" element={
           <ProtectedRoute>
@@ -66,14 +80,61 @@ export default function App() {
           <Route path="settings" element={<Settings />} />
         </Route>
 
-        {/* --- Admin Routes --- */}
-        <Route path="/admin" element={
+        {/* --- Admin Dashboard Routes --- */}
+        <Route path="/admin/dashboard" element={
           <ProtectedRoute requireAdmin={true}>
             <AdminLayout />
           </ProtectedRoute>
         }>
           <Route index element={<AdminDashboard />} />
-          {/* Add more admin routes here like /admin/users if needed */}
+        </Route>
+
+        <Route path="/admin/users" element={
+          <ProtectedRoute requireAdmin={true}>
+            <AdminLayout />
+          </ProtectedRoute>
+        }>
+          <Route index element={<AdminUsers />} />
+        </Route>
+
+        <Route path="/admin/files" element={
+          <ProtectedRoute requireAdmin={true}>
+            <AdminLayout />
+          </ProtectedRoute>
+        }>
+          <Route index element={<AdminFiles />} />
+        </Route>
+
+        <Route path="/admin/plans" element={
+          <ProtectedRoute requireAdmin={true}>
+            <AdminLayout />
+          </ProtectedRoute>
+        }>
+          <Route index element={<AdminPlans />} />
+        </Route>
+
+        <Route path="/admin/coupons" element={
+          <ProtectedRoute requireAdmin={true}>
+            <AdminLayout />
+          </ProtectedRoute>
+        }>
+          <Route index element={<AdminCoupons />} />
+        </Route>
+
+        <Route path="/admin/transactions" element={
+          <ProtectedRoute requireAdmin={true}>
+            <AdminLayout />
+          </ProtectedRoute>
+        }>
+          <Route index element={<AdminTransactions />} />
+        </Route>
+
+        <Route path="/admin/health" element={
+          <ProtectedRoute requireAdmin={true}>
+            <AdminLayout />
+          </ProtectedRoute>
+        }>
+          <Route index element={<AdminSystemHealth />} />
         </Route>
 
         {/* Catch all */}

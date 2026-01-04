@@ -162,3 +162,7 @@
     background-position: 0% 0%;
   }
 }
+
+.animate-shine {
+  animation: shine var(--duration, 14s) infinite linear;
+}
