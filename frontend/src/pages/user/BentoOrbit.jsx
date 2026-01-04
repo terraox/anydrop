@@ -199,7 +199,7 @@ export default function BentoOrbit() {
                                             initial={{ opacity: 0, scale: 0.95 }}
                                             animate={{ opacity: 1, scale: 1 }}
                                             exit={{ opacity: 0, height: 0 }}
-                                            className="group relative flex items-center gap-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:border-violet-500/50 bg-white dark:bg-zinc-800/40 transition-all shadow-sm"
+                                            className="group relative flex items-center gap-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:border-violet-500/50 bg-white dark:bg-zinc-800 transition-all shadow-sm"
                                         >
                                             <div className="h-10 w-10 shrink-0 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-700 flex items-center justify-center text-violet-600 dark:text-violet-500">
                                                 {file.status === 'sent' ? <CheckCircle className="w-5 h-5 text-emerald-500" /> : <File className="w-5 h-5" />}
@@ -210,7 +210,11 @@ export default function BentoOrbit() {
                                                     <h4 className="text-sm font-bold text-zinc-900 dark:text-white truncate w-full">{file.name}</h4>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); removeFile(file.id); }}
-                                                        className="absolute top-2 right-2 p-1 text-zinc-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-zinc-800 rounded-full shadow-sm"
+                                                        className={`absolute top-2 right-2 p-1.5 rounded-full border-2 border-white dark:border-zinc-900 transition-all shadow-md ${file.status === 'uploading'
+                                                                ? 'bg-red-500 text-white opacity-100'
+                                                                : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500 hover:bg-red-500 hover:text-white opacity-0 group-hover:opacity-100'
+                                                            }`}
+                                                        title={file.status === 'uploading' ? 'Cancel upload' : 'Remove file'}
                                                     >
                                                         <X className="w-3 h-3" />
                                                     </button>

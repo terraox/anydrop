@@ -251,7 +251,7 @@ export default function ClassicOrbit() {
             </div>
 
             {/* Floating File Satellites */}
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+            <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center">
                 <AnimatePresence>
                     {files.map((file, index) => {
                         // Satellite Logic: Distribute evenly in a circle circle
@@ -278,13 +278,16 @@ export default function ClassicOrbit() {
                                 className="pointer-events-auto absolute"
                                 style={{ x: 0, y: 0 }} // Reset default styles, let motion handle transform
                             >
-                                <div className="relative w-48 backdrop-blur-xl bg-white/80 dark:bg-zinc-900/80 border border-zinc-200 dark:border-white/10 p-3 rounded-2xl shadow-xl flex flex-col gap-2 group cursor-default hover:scale-105 transition-transform hover:z-50 hover:shadow-violet-500/20">
+                                <div className="relative z-30 w-48 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 p-3 rounded-2xl shadow-xl flex flex-col gap-2 group cursor-default hover:scale-105 transition-transform hover:z-50 hover:shadow-violet-500/20 opacity-100">
 
-                                    {/* Delete Badge */}
+                                    {/* Delete/Cancel Badge */}
                                     <button
                                         onClick={(e) => { e.stopPropagation(); removeFile(file.id); }}
-                                        className="absolute -top-2 -right-2 p-1 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-500 hover:bg-red-500 hover:text-white border-2 border-white dark:border-zinc-950 transition-colors shadow-sm opacity-0 group-hover:opacity-100"
-                                        title="Remove file"
+                                        className={`absolute -top-2 -right-2 p-1.5 rounded-full border-2 border-white dark:border-zinc-900 transition-all shadow-md ${file.status === 'uploading'
+                                            ? 'bg-red-500 text-white opacity-100'
+                                            : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500 hover:bg-red-500 hover:text-white opacity-0 group-hover:opacity-100'
+                                            }`}
+                                        title={file.status === 'uploading' ? 'Cancel upload' : 'Remove file'}
                                     >
                                         <X className="w-3 h-3" />
                                     </button>
@@ -295,16 +298,18 @@ export default function ClassicOrbit() {
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <p className="text-xs font-bold text-zinc-900 dark:text-white truncate">{file.name}</p>
-                                            <p className="text-[10px] text-zinc-500">{file.size}</p>
+                                            <p className="text-[10px] text-zinc-500">
+                                                {file.status === 'uploading' ? `${file.progress}% • Uploading...` : file.size}
+                                            </p>
                                         </div>
                                     </div>
 
                                     {/* Progress Bar */}
-                                    <div className="h-1 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                    <div className="h-1.5 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
                                         <motion.div
                                             initial={{ width: 0 }}
                                             animate={{ width: `${file.progress}%` }}
-                                            className={`h-full ${file.status === 'sent' ? 'bg-emerald-500' : 'bg-violet-500'}`}
+                                            className={`h-full ${file.status === 'sent' ? 'bg-emerald-500' : file.status === 'error' ? 'bg-red-500' : 'bg-violet-500'}`}
                                         />
                                     </div>
 
