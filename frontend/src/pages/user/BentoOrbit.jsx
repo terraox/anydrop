@@ -15,6 +15,37 @@ export default function BentoOrbit() {
     const [files, setFiles] = useState([]);
     const { playUploadStart, playUploadSuccess, playUploadError } = useSoundEffects();
 
+    // Device Name Logic
+    const generateDeviceName = () => {
+        const prefixes = ['Orbit', 'Nexus', 'Flux', 'Cyber', 'Titan', 'Aero', 'Prime'];
+        const suffixes = ['Alpha', 'Beta', 'Prime', 'X', '9', 'V2', 'Link'];
+        return `${prefixes[Math.floor(Math.random() * prefixes.length)]}-${suffixes[Math.floor(Math.random() * suffixes.length)]}-${Math.floor(Math.random() * 100)}`;
+    };
+
+    const [deviceName, setDeviceName] = useState(() => localStorage.getItem('anydrop_device_name') || generateDeviceName());
+    const [isEditingName, setIsEditingName] = useState(false);
+
+    const handleNameSave = async () => {
+        setIsEditingName(false);
+        localStorage.setItem('anydrop_device_name', deviceName);
+
+        // Also save to backend server-level settings
+        try {
+            const axios = (await import('axios')).default;
+            await axios.put('http://192.168.1.59:8080/api/device/name', {
+                deviceName: deviceName
+            });
+            toast.success('Device name updated on all devices!');
+        } catch (error) {
+            console.error('Failed to update server device name:', error);
+            toast.error('Saved locally, but failed to update server name');
+        }
+    };
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter') handleNameSave();
+    };
+
     React.useEffect(() => {
         document.title = "AnyDrop";
 
@@ -96,36 +127,7 @@ export default function BentoOrbit() {
         toast.info("Transfer rejected");
     };
 
-    // Device Name Logic
-    const generateDeviceName = () => {
-        const prefixes = ['Orbit', 'Nexus', 'Flux', 'Cyber', 'Titan', 'Aero', 'Prime'];
-        const suffixes = ['Alpha', 'Beta', 'Prime', 'X', '9', 'V2', 'Link'];
-        return `${prefixes[Math.floor(Math.random() * prefixes.length)]}-${suffixes[Math.floor(Math.random() * suffixes.length)]}-${Math.floor(Math.random() * 100)}`;
-    };
 
-    const [deviceName, setDeviceName] = useState(() => localStorage.getItem('anydrop_device_name') || generateDeviceName());
-    const [isEditingName, setIsEditingName] = useState(false);
-
-    const handleNameSave = async () => {
-        setIsEditingName(false);
-        localStorage.setItem('anydrop_device_name', deviceName);
-
-        // Also save to backend server-level settings
-        try {
-            const axios = (await import('axios')).default;
-            await axios.put('http://192.168.1.59:8080/api/device/name', {
-                deviceName: deviceName
-            });
-            toast.success('Device name updated on all devices!');
-        } catch (error) {
-            console.error('Failed to update server device name:', error);
-            toast.error('Saved locally, but failed to update server name');
-        }
-    };
-
-    const handleKeyDown = (e) => {
-        if (e.key === 'Enter') handleNameSave();
-    };
 
     const processFiles = async (fileList) => {
         const newFiles = Array.from(fileList).map(file => ({
