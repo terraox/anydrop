@@ -59,6 +59,18 @@ export default function Devices() {
         return <Laptop className="w-6 h-6" />;
     };
 
+    // usage
+    const myDeviceName = (localStorage.getItem('anydrop_device_name') || '').trim().toLowerCase();
+
+    // Filter out self-devices
+    const filteredDevices = devices.filter(d => {
+        const dName = (d.name || '').trim().toLowerCase();
+        const isSelfName = dName === myDeviceName;
+        const isSelfIp = typeof window !== 'undefined' &&
+            (d.ip === window.location.hostname || d.ip === '127.0.0.1' || d.ip === 'localhost');
+        return !isSelfName && !isSelfIp;
+    });
+
     return (
         <div className="p-6 w-full space-y-8">
 
@@ -80,7 +92,7 @@ export default function Devices() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {devices.length === 0 && (
+                {filteredDevices.length === 0 && (
                     <div className="col-span-full p-12 text-center text-zinc-500 italic border-dashed border-2 border-zinc-200 dark:border-zinc-800 rounded-2xl">
                         {isScanning ? (
                             <div className="flex flex-col items-center gap-4">
@@ -92,7 +104,7 @@ export default function Devices() {
                         )}
                     </div>
                 )}
-                {devices.map((device, idx) => {
+                {filteredDevices.map((device, idx) => {
                     const isLowBattery = device.battery < 20;
 
                     const CardContent = (

@@ -87,9 +87,12 @@ export default function BentoOrbit() {
     // Derived state for total unique devices
     // Filter out ourselves and deduplicate
     const nearbyDevices = React.useMemo(() => {
-        const filteredWs = wsDevices.filter(d => d.name !== deviceName);
+        const normalizedDeviceName = (deviceName || '').trim().toLowerCase();
+
+        const filteredWs = wsDevices.filter(d => (d.name || '').trim().toLowerCase() !== normalizedDeviceName);
         const filteredLan = lanDevices.filter(d => {
-            const isSelfName = d.name === deviceName;
+            const dName = (d.name || '').trim().toLowerCase();
+            const isSelfName = dName === normalizedDeviceName;
             const isSelfIp = typeof window !== 'undefined' && (d.ip === window.location.hostname || d.ip === '127.0.0.1' || d.ip === 'localhost');
             return !isSelfName && !isSelfIp;
         });

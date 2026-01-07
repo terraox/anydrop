@@ -83,11 +83,14 @@ export default function ClassicOrbit() {
 
     // Derived state for total unique devices
     // Filter out ourselves (by name match or IP match)
-    const filteredWsDevices = wsDevices.filter(d => d.name !== deviceName);
+    const normalizedDeviceName = (deviceName || '').trim().toLowerCase();
+
+    const filteredWsDevices = wsDevices.filter(d => (d.name || '').trim().toLowerCase() !== normalizedDeviceName);
 
     // Filter LAN devices - exclude if name matches or IP matches current hostname
     const filteredLanDevices = lanDevices.filter(d => {
-        const isSelfName = d.name === deviceName;
+        const dName = (d.name || '').trim().toLowerCase();
+        const isSelfName = dName === normalizedDeviceName;
         const isSelfIp = typeof window !== 'undefined' && (d.ip === window.location.hostname || d.ip === '127.0.0.1' || d.ip === 'localhost');
         return !isSelfName && !isSelfIp;
     });
