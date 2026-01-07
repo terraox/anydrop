@@ -24,6 +24,8 @@
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/security/JwtAuthenticationFilter.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/controller/AdminController.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/controller/DeviceController.java
+/Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/repository/ServerSettingsRepository.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/controller/TransferController.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/repository/UserRepository.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/config/CorsConfig.java
+/Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/model/ServerSettings.java

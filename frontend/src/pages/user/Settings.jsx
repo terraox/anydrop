@@ -6,6 +6,7 @@ import ChangePasswordModal from '../../components/user/ChangePasswordModal';
 import { useState, useRef, useEffect } from 'react';
 import { useSoundEffects } from '../../hooks/useSoundEffects';
 import api from '../../services/api';
+import axios from 'axios';
 
 
 const SoundEffectsToggle = () => {
@@ -100,8 +101,8 @@ export default function Settings() {
     const fileInputRef = useRef(null);
 
     useEffect(() => {
-        // Load device name
-        api.get('/device/identity')
+        // Load device name using direct axios (not api) to avoid auth
+        axios.get('http://192.168.1.59:8080/api/device/identity')
             .then(res => setDeviceName(res.data.deviceName))
             .catch(err => console.error('Failed to load device name:', err));
     }, []);
@@ -151,7 +152,11 @@ export default function Settings() {
 
         setIsLoadingDeviceName(true);
         try {
-            await api.put('/device/name', { deviceName: deviceName.trim() });
+            // Use axios directly (not api) to avoid sending auth token
+            // /api/device/** is a public endpoint
+            const response = await axios.put('http://192.168.1.59:8080/api/device/name', {
+                deviceName: deviceName.trim()
+            });
             toast.success('Device name updated! Other devices will see the new name.');
         } catch (error) {
             toast.error('Failed to update device name');

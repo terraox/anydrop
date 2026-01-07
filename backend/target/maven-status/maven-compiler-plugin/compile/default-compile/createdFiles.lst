@@ -1,7 +1,9 @@
 com/anydrop/backend/service/FileStorageService.class
 com/anydrop/backend/repository/UserRepository.class
+com/anydrop/backend/model/ServerSettings.class
 com/anydrop/backend/controller/DeviceController.class
 com/anydrop/backend/config/ThrottlingFilter.class
+com/anydrop/backend/model/ServerSettings$ServerSettingsBuilder.class
 com/anydrop/backend/controller/RemoteControlController.class
 com/anydrop/backend/task/CleanupTask.class
 com/anydrop/backend/repository/HistoryRepository.class

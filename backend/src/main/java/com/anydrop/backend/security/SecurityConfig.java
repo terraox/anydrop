@@ -35,9 +35,12 @@ public class SecurityConfig {
                 .cors(cors -> cors.configure(http)) // Enable CORS
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/api/identify", "/ws/**").permitAll() // Whitelist Auth,
-                                                                                                // Identity, and
-                                                                                                // WebSocket
+                        .requestMatchers("/api/auth/**", "/api/identify", "/api/device/**", "/ws/**").permitAll() // Whitelist
+                                                                                                                  // Auth,
+                                                                                                                  // Identity,
+                                                                                                                  // Device,
+                                                                                                                  // and
+                                                                                                                  // WebSocket
                         .anyRequest().authenticated())
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(authenticationProvider)
