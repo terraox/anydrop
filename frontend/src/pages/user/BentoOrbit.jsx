@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, File, X, Wifi, Plus, Laptop, Smartphone, Search, Zap, Activity, Clock, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import FileService from '../../services/file.service';
+import WebSocketService from '../../services/websocket.service';
 import Logo from '../../components/ui/Logo';
 import GlassCard from '../../components/ui/GlassCard';
 import FileUpload from '../../components/ui/FileUpload';
@@ -15,7 +16,47 @@ export default function BentoOrbit() {
 
     React.useEffect(() => {
         document.title = "AnyDrop";
+
+        // Connect WebSocket
+        WebSocketService.connect(() => {
+            // Register this device
+            WebSocketService.registerDevice({ name: deviceName });
+
+            // Subscribe to Transfers
+            WebSocketService.subscribe('/user/queue/transfers', (request) => {
+                setIncomingTransfer(request);
+            });
+
+            // Subscribe to Active Devices
+            WebSocketService.subscribe('/user/queue/devices', (deviceList) => {
+                setNearbyDevices(deviceList);
+            });
+        });
+
+        return () => WebSocketService.disconnect();
     }, []);
+
+    // Transfer Request State
+    const [incomingTransfer, setIncomingTransfer] = useState(null);
+    const [nearbyDevices, setNearbyDevices] = useState([]);
+
+    const handleAcceptTransfer = () => {
+        if (incomingTransfer?.downloadUrl) {
+            const link = document.createElement('a');
+            link.href = incomingTransfer.downloadUrl;
+            link.download = incomingTransfer.filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            toast.success(`Downloading ${incomingTransfer.filename}...`);
+        }
+        setIncomingTransfer(null);
+    };
+
+    const handleRejectTransfer = () => {
+        setIncomingTransfer(null);
+        toast.info("Transfer rejected");
+    };
 
     // Device Name Logic
     const generateDeviceName = () => {
@@ -158,13 +199,21 @@ export default function BentoOrbit() {
                         </div>
 
                         <div className="space-y-3">
-                            <div className="flex items-center justify-between p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800">
-                                <div className="flex items-center gap-3">
-                                    <Smartphone className="w-5 h-5 text-violet-500" />
-                                    <span className="text-base font-semibold text-zinc-700 dark:text-zinc-300">iPhone 15 Pro</span>
+                            {nearbyDevices.length === 0 ? (
+                                <div className="text-center p-4 text-zinc-400 dark:text-zinc-600 text-sm italic">
+                                    No devices found
                                 </div>
-                                <div className="w-2 h-2 rounded-full bg-amber-500 box-content border-2 border-white dark:border-zinc-800" />
-                            </div>
+                            ) : (
+                                nearbyDevices.map((device, idx) => (
+                                    <div key={idx} className="flex items-center justify-between p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 animate-in slide-in-from-bottom-2 fade-in duration-300">
+                                        <div className="flex items-center gap-3">
+                                            {device.deviceType === 'PHONE' ? <Smartphone className="w-5 h-5 text-violet-500" /> : <Laptop className="w-5 h-5 text-blue-500" />}
+                                            <span className="text-base font-semibold text-zinc-700 dark:text-zinc-300">{device.name}</span>
+                                        </div>
+                                        <div className="w-2 h-2 rounded-full bg-emerald-500 box-content border-2 border-white dark:border-zinc-800 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </GlassCard>
 
@@ -211,8 +260,8 @@ export default function BentoOrbit() {
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); removeFile(file.id); }}
                                                         className={`absolute top-2 right-2 p-1.5 rounded-full border-2 border-white dark:border-zinc-900 transition-all shadow-md ${file.status === 'uploading'
-                                                                ? 'bg-red-500 text-white opacity-100'
-                                                                : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500 hover:bg-red-500 hover:text-white opacity-0 group-hover:opacity-100'
+                                                            ? 'bg-red-500 text-white opacity-100'
+                                                            : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500 hover:bg-red-500 hover:text-white opacity-0 group-hover:opacity-100'
                                                             }`}
                                                         title={file.status === 'uploading' ? 'Cancel upload' : 'Remove file'}
                                                     >
@@ -261,7 +310,7 @@ export default function BentoOrbit() {
                                     <div className="w-2 h-2 rounded-full bg-zinc-300 dark:bg-zinc-700" />
                                     <div className="flex-1">
                                         <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 font-sans">Received "Design_V2.fig"</p>
-                                        <p className="text-[10px] text-zinc-400 font-mono">From iPad Air • 2 mins ago</p>
+                                        <p className="text-[10px] text-zinc-400 font-mono">From Nearby Device • 2 mins ago</p>
                                     </div>
                                 </div>
                             ))}
@@ -269,7 +318,7 @@ export default function BentoOrbit() {
                                 <div className="w-2 h-2 rounded-full bg-emerald-500" />
                                 <div className="flex-1">
                                     <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 font-sans">Sent "HolidayOP.jpg"</p>
-                                    <p className="text-[10px] text-zinc-400 font-mono">To iPhone 15 Pro • 1 hour ago</p>
+                                    <p className="text-[10px] text-zinc-400 font-mono">To Nearby Device • 1 hour ago</p>
                                 </div>
                             </div>
                         </div>
@@ -277,6 +326,51 @@ export default function BentoOrbit() {
                 </GlassCard>
 
             </div>
+            {/* --- INCOMING TRANSFER DIALOG (Glassmorphic) --- */}
+            <AnimatePresence>
+                {incomingTransfer && (
+                    <div className="fixed inset-0 z-50 flex items-end justify-center pb-10 pointer-events-none">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            className="pointer-events-auto p-6 rounded-3xl bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border border-white/20 shadow-2xl flex flex-col gap-4 w-80"
+                        >
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-full bg-violet-500/20 flex items-center justify-center animate-pulse">
+                                    <File className="w-6 h-6 text-violet-500" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-zinc-900 dark:text-white">Incoming File</h3>
+                                    <p className="text-xs text-zinc-500">from {incomingTransfer.sender || 'Unknown Device'}</p>
+                                </div>
+                            </div>
+
+                            <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700/50">
+                                <p className="text-sm font-semibold truncate text-zinc-800 dark:text-zinc-200">{incomingTransfer.filename}</p>
+                                <p className="text-xs text-zinc-500 mt-1">
+                                    {(incomingTransfer.size / 1024 / 1024).toFixed(2)} MB • {incomingTransfer.fileType?.split('/')[1] || 'File'}
+                                </p>
+                            </div>
+
+                            <div className="flex gap-2 mt-2">
+                                <button
+                                    onClick={handleRejectTransfer}
+                                    className="flex-1 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs font-bold hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                                >
+                                    Decline
+                                </button>
+                                <button
+                                    onClick={handleAcceptTransfer}
+                                    className="flex-1 py-2 rounded-xl bg-violet-500 text-white text-xs font-bold hover:bg-violet-600 transition-colors shadow-lg shadow-violet-500/20"
+                                >
+                                    Accept
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div >
     );
 }

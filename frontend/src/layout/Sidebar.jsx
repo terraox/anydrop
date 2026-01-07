@@ -10,7 +10,8 @@ import {
   LogOut,
   Zap,
   Radar,
-  ShieldCheck
+  ShieldCheck,
+  Download
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Logo from '../components/ui/Logo';
@@ -43,6 +44,7 @@ export default function Sidebar() {
       path: '/'
     },
     { icon: History, label: 'History', path: '/history' },
+    { icon: Download, label: 'Receive', path: '/receive' },
     { icon: Smartphone, label: 'Devices', path: '/devices' },
     { icon: CreditCard, label: 'Pricing', path: '/pricing' },
     { icon: Settings, label: 'Settings', path: '/settings' },

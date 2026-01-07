@@ -11,10 +11,10 @@ const TABS = [
 ];
 
 const MOCK_FILES = [
-  { id: 1, name: 'Project_Alpha_V2.pdf', size: '2.4 MB', status: 'success', date: '2 min ago', device: 'MacBook Pro' },
-  { id: 2, name: 'funny_cat.mp4', size: '15.8 MB', status: 'success', date: '10 min ago', device: 'iPhone 15' },
-  { id: 3, name: 'secret_keys.env', size: '4 KB', status: 'failed', date: '1 hour ago', device: 'Linux Server' },
-  { id: 4, name: 'presentation_final.pptx', size: '12 MB', status: 'success', date: 'Yesterday', device: 'iPad Air' },
+  { id: 1, name: 'Project_Alpha_V2.pdf', size: '2.4 MB', status: 'success', date: '2 min ago', device: 'Nearby Device' },
+  { id: 2, name: 'funny_cat.mp4', size: '15.8 MB', status: 'success', date: '10 min ago', device: 'Nearby Device' },
+  { id: 3, name: 'secret_keys.env', size: '4 KB', status: 'failed', date: '1 hour ago', device: 'Remote Server' },
+  { id: 4, name: 'presentation_final.pptx', size: '12 MB', status: 'success', date: 'Yesterday', device: 'Nearby Device' },
 ];
 
 const MOCK_CLIPBOARD = [

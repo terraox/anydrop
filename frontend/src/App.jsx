@@ -16,6 +16,7 @@ import Devices from './pages/user/Devices';
 import Pricing from './pages/user/Pricing';
 import Checkout from './pages/user/Checkout';
 import Settings from './pages/user/Settings';
+import Receive from './pages/user/Receive';
 
 // Admin Pages
 import AdminLogin from './pages/admin/AdminLogin';
@@ -78,6 +79,7 @@ export default function App() {
           <Route path="pricing" element={<Pricing />} />
           <Route path="checkout" element={<Checkout />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="receive" element={<Receive />} />
         </Route>
 
         {/* --- Admin Dashboard Routes --- */}

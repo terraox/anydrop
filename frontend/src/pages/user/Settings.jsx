@@ -1,10 +1,11 @@
-import { User, Mail, Lock, Shield, LogOut, Monitor, Moon, Sun, Laptop, Camera, Key, RefreshCw, LayoutGrid, Volume2 } from 'lucide-react';
+import { User, Mail, Lock, Shield, LogOut, Monitor, Moon, Sun, Laptop, Camera, Key, RefreshCw, LayoutGrid, Volume2, Smartphone } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import ChangePasswordModal from '../../components/user/ChangePasswordModal';
 import { useState, useRef, useEffect } from 'react';
 import { useSoundEffects } from '../../hooks/useSoundEffects';
+import api from '../../services/api';
 
 
 const SoundEffectsToggle = () => {
@@ -94,7 +95,16 @@ export default function Settings() {
     const { user, logout, updateProfile, changePassword } = useAuth();
     const { theme, setTheme } = useTheme();
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const [deviceName, setDeviceName] = useState('');
+    const [isLoadingDeviceName, setIsLoadingDeviceName] = useState(false);
     const fileInputRef = useRef(null);
+
+    useEffect(() => {
+        // Load device name
+        api.get('/device/identity')
+            .then(res => setDeviceName(res.data.deviceName))
+            .catch(err => console.error('Failed to load device name:', err));
+    }, []);
 
     const handleAvatarClick = () => {
         fileInputRef.current?.click();
@@ -131,6 +141,24 @@ export default function Settings() {
         const diceBearUrl = `https://api.dicebear.com/7.x/adventurer/svg?seed=${randomSeed}`;
         updateProfile({ avatar: diceBearUrl });
         toast.success("New character generated!");
+    };
+
+    const handleSaveDeviceName = async () => {
+        if (!deviceName || deviceName.trim() === '') {
+            toast.error('Device name cannot be empty');
+            return;
+        }
+
+        setIsLoadingDeviceName(true);
+        try {
+            await api.put('/device/name', { deviceName: deviceName.trim() });
+            toast.success('Device name updated! Other devices will see the new name.');
+        } catch (error) {
+            toast.error('Failed to update device name');
+            console.error(error);
+        } finally {
+            setIsLoadingDeviceName(false);
+        }
     };
 
     const handleLogoutAll = () => {
@@ -221,6 +249,31 @@ export default function Settings() {
                                     />
                                 </div>
                             </div>
+                            <div className="grid gap-1.5">
+                                <label className="text-xs font-semibold uppercase text-zinc-500">Device Name</label>
+                                <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus-within:border-violet-500 focus-within:ring-1 focus-within:ring-violet-500 transition-all flex-1">
+                                        <Laptop className="w-4 h-4 text-zinc-400" />
+                                        <input
+                                            type="text"
+                                            value={deviceName}
+                                            onChange={(e) => setDeviceName(e.target.value)}
+                                            placeholder={user?.username + "'s Computer"}
+                                            className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-white w-full placeholder:text-zinc-500"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={handleSaveDeviceName}
+                                        disabled={isLoadingDeviceName}
+                                        className={`px-4 py-2 bg-violet-500 hover:bg-violet-600 text-white text-sm font-semibold rounded-lg transition-all ${isLoadingDeviceName ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                        {isLoadingDeviceName ? 'Saving...' : 'Save'}
+                                    </button>
+                                </div>
+                                <p className="text-[10px] text-zinc-400">
+                                    This name will be visible to other devices on the network.
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -310,7 +363,7 @@ export default function Settings() {
                         <div>
                             <h3 className="font-semibold text-red-900 dark:text-red-200">Log out all devices</h3>
                             <p className="text-sm text-red-700 dark:text-red-300/70 mt-1">
-                                This will terminate active sessions on all other devices (iPhone 15 Pro, iPad Air).
+                                This will terminate active sessions on all other devices (e.g. other logged in devices).
                             </p>
                         </div>
                         <button

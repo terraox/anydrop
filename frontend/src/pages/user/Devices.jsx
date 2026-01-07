@@ -1,18 +1,46 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Smartphone, Laptop, Tablet, Battery, Wifi, Play, Pause, SkipForward, Power, Radio, ShieldAlert } from 'lucide-react';
+import { Smartphone, Laptop, Tablet, Battery, Wifi, Play, Pause, SkipForward, Power, Radio, ShieldAlert, RefreshCw, Monitor } from 'lucide-react';
 import ShineBorder from '../../components/magicui/ShineBorder';
 import { toast } from 'sonner';
-
-const DEVICES = [
-    { id: 1, name: 'MacBook Pro M3', type: 'laptop', battery: 84, status: 'online', current: true },
-    { id: 2, name: 'iPhone 15 Pro', type: 'mobile', battery: 42, status: 'online', current: false },
-    { id: 3, name: 'iPad Air 5', type: 'tablet', battery: 12, status: 'sleep', current: false },
-];
+import discoveryService from '../../services/discovery.service';
 
 export default function Devices() {
     const [sentryMode, setSentryMode] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [devices, setDevices] = useState([]);
+    const [isScanning, setIsScanning] = useState(false);
+
+    useEffect(() => {
+        // Subscribe to discovery updates
+        const handleDeviceUpdate = (deviceList) => {
+            setDevices(deviceList);
+            setIsScanning(discoveryService.isScanning);
+        };
+
+        discoveryService.addListener(handleDeviceUpdate);
+
+        // Start initial scan
+        setIsScanning(true);
+        discoveryService.scanNetwork();
+
+        return () => {
+            discoveryService.removeListener(handleDeviceUpdate);
+        };
+    }, []);
+
+    const handleRefresh = () => {
+        setIsScanning(true);
+        toast.info('Scanning for nearby devices...');
+        discoveryService.scanNetwork().then(() => {
+            setIsScanning(false);
+            if (discoveryService.getDevices().length > 0) {
+                toast.success(`Found ${discoveryService.getDevices().length} device(s)!`);
+            } else {
+                toast.info('No devices found. Make sure AnyDrop is running on other devices.');
+            }
+        });
+    };
 
     const handlePing = (deviceName) => {
         toast.info(`Pinging ${deviceName}...`);
@@ -23,16 +51,48 @@ export default function Devices() {
         toast(sentryMode ? "Sentry Mode Deactivated" : "Sentry Mode Activated - Scanning Grid");
     };
 
+    const getDeviceIcon = (device) => {
+        const type = device.type?.toLowerCase() || device.icon?.toLowerCase() || 'laptop';
+        if (type === 'mobile' || type === 'phone' || type === 'smartphone') return <Smartphone className="w-6 h-6" />;
+        if (type === 'tablet') return <Tablet className="w-6 h-6" />;
+        if (type === 'desktop') return <Monitor className="w-6 h-6" />;
+        return <Laptop className="w-6 h-6" />;
+    };
+
     return (
         <div className="p-6 w-full space-y-8">
 
             <div className="flex flex-col gap-2">
-                <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">Command Center</h1>
-                <p className="text-zinc-500 dark:text-zinc-400">Manage your neural link ecosystem.</p>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">Command Center</h1>
+                        <p className="text-zinc-500 dark:text-zinc-400">Manage your neural link ecosystem.</p>
+                    </div>
+                    <button
+                        onClick={handleRefresh}
+                        disabled={isScanning}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-500 hover:bg-violet-600 text-white font-medium transition-colors ${isScanning ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                        <RefreshCw className={`w-4 h-4 ${isScanning ? 'animate-spin' : ''}`} />
+                        {isScanning ? 'Scanning...' : 'Scan Network'}
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {DEVICES.map((device) => {
+                {devices.length === 0 && (
+                    <div className="col-span-full p-12 text-center text-zinc-500 italic border-dashed border-2 border-zinc-200 dark:border-zinc-800 rounded-2xl">
+                        {isScanning ? (
+                            <div className="flex flex-col items-center gap-4">
+                                <RefreshCw className="w-8 h-8 animate-spin text-violet-500" />
+                                <span>Scanning for devices...</span>
+                            </div>
+                        ) : (
+                            <span>No devices found. Click "Scan Network" to search.</span>
+                        )}
+                    </div>
+                )}
+                {devices.map((device, idx) => {
                     const isLowBattery = device.battery < 20;
 
                     const CardContent = (
@@ -42,9 +102,7 @@ export default function Devices() {
                             <div className="flex items-start justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white">
-                                        {device.type === 'laptop' && <Laptop className="w-6 h-6" />}
-                                        {device.type === 'mobile' && <Smartphone className="w-6 h-6" />}
-                                        {device.type === 'tablet' && <Tablet className="w-6 h-6" />}
+                                        {getDeviceIcon(device)}
                                     </div>
                                     <div>
                                         <h3 className="font-bold text-zinc-900 dark:text-white">{device.name}</h3>
@@ -52,6 +110,9 @@ export default function Devices() {
                                             <div className={`w-2 h-2 rounded-full ${device.status === 'online' ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-500'}`} />
                                             <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{device.status}</span>
                                         </div>
+                                        {device.ip && (
+                                            <p className="text-xs text-zinc-400 mt-1">{device.ip}:{device.port}</p>
+                                        )}
                                     </div>
                                 </div>
 
@@ -101,29 +162,6 @@ export default function Devices() {
                                     <ShieldAlert className="w-4 h-4" /> Sentry
                                 </button>
                             </div>
-
-                            {/* Media Controls (Only for Mobile) */}
-                            {device.type === 'mobile' && (
-                                <div className="bg-zinc-900 dark:bg-black rounded-xl p-3 flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center">
-                                            <Wifi className="w-5 h-5 text-zinc-500" />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-zinc-400">Now Playing</p>
-                                            <p className="text-sm font-bold text-white truncate w-24">Cyberpunk 2077 OST</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <button onClick={() => setIsPlaying(!isPlaying)} className="p-2 rounded-full bg-white text-black hover:scale-105 transition-transform">
-                                            {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
-                                        </button>
-                                        <button className="p-2 text-zinc-400 hover:text-white">
-                                            <SkipForward className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     );
 
@@ -132,7 +170,7 @@ export default function Devices() {
                             key={device.id}
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            transition={{ duration: 0.3, delay: device.id * 0.1 }}
+                            transition={{ duration: 0.3, delay: idx * 0.1 }}
                             className="col-span-1"
                         >
                             {device.current ? (

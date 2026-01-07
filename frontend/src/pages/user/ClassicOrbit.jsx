@@ -4,6 +4,7 @@ import { Upload, File, X, Wifi, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import Ripple from '../../components/magicui/Ripple';
 import FileService from '../../services/file.service';
+import WebSocketService from '../../services/websocket.service';
 
 export default function ClassicOrbit() {
     const [isDragging, setIsDragging] = useState(false);
@@ -12,7 +13,48 @@ export default function ClassicOrbit() {
 
     React.useEffect(() => {
         document.title = "AnyDrop";
+
+        // Connect WebSocket
+        WebSocketService.connect(() => {
+            const name = localStorage.getItem('anydrop_device_name') || generateDeviceName();
+            WebSocketService.registerDevice({ name });
+
+            // Subscribe to personal transfers
+            WebSocketService.subscribe('/user/queue/transfers', (request) => {
+                setIncomingTransfer(request);
+            });
+
+            // Subscribe to devices count
+            WebSocketService.subscribe('/user/queue/devices', (deviceList) => {
+                setNeighborCount(deviceList.length);
+            });
+        });
+
+        return () => WebSocketService.disconnect();
     }, []);
+
+    // Transfer Request State
+    const [incomingTransfer, setIncomingTransfer] = useState(null);
+    const [neighborCount, setNeighborCount] = useState(0);
+
+    const handleAcceptTransfer = () => {
+        if (incomingTransfer?.downloadUrl) {
+            // Trigger download
+            const link = document.createElement('a');
+            link.href = incomingTransfer.downloadUrl;
+            link.download = incomingTransfer.filename; // Browser might ignore this for cross-origin
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            toast.success(`Downloading ${incomingTransfer.filename}...`);
+        }
+        setIncomingTransfer(null);
+    };
+
+    const handleRejectTransfer = () => {
+        setIncomingTransfer(null);
+        toast.info("Transfer rejected");
+    };
 
     // Device Name Logic
     const generateDeviceName = () => {
@@ -320,15 +362,61 @@ export default function ClassicOrbit() {
                 </AnimatePresence>
             </div>
 
+
+
+            {/* --- INCOMING TRANSFER DIALOG (Glassmorphic) --- */}
+            <AnimatePresence>
+                {incomingTransfer && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                        className="absolute bottom-10 z-50 p-6 rounded-3xl bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border border-white/20 shadow-2xl flex flex-col gap-4 w-80"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-full bg-violet-500/20 flex items-center justify-center animate-pulse">
+                                <File className="w-6 h-6 text-violet-500" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-zinc-900 dark:text-white">Incoming File</h3>
+                                <p className="text-xs text-zinc-500">from {incomingTransfer.sender || 'Unknown Device'}</p>
+                            </div>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700/50">
+                            <p className="text-sm font-semibold truncate text-zinc-800 dark:text-zinc-200">{incomingTransfer.filename}</p>
+                            <p className="text-xs text-zinc-500 mt-1">
+                                {(incomingTransfer.size / 1024 / 1024).toFixed(2)} MB • {incomingTransfer.fileType?.split('/')[1] || 'File'}
+                            </p>
+                        </div>
+
+                        <div className="flex gap-2 mt-2">
+                            <button
+                                onClick={handleRejectTransfer}
+                                className="flex-1 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs font-bold hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                            >
+                                Decline
+                            </button>
+                            <button
+                                onClick={handleAcceptTransfer}
+                                className="flex-1 py-2 rounded-xl bg-violet-500 text-white text-xs font-bold hover:bg-violet-600 transition-colors shadow-lg shadow-violet-500/20"
+                            >
+                                Accept
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Device Radar Blips */}
             <div className="absolute top-10 right-10 p-4 rounded-2xl bg-white/60 dark:bg-zinc-900/50 backdrop-blur-md border border-zinc-200 dark:border-white/5 shadow-sm">
                 <div className="flex items-center gap-3">
                     <div className="relative">
-                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                        <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${neighborCount > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'}`} />
                         <Wifi className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
                     </div>
                     <div className="text-sm">
-                        <p className="font-medium text-zinc-900 dark:text-white">3 Devices Near</p>
+                        <p className="font-medium text-zinc-900 dark:text-white">{neighborCount} Devices Near</p>
                         <p className="text-xs text-zinc-500">Ready to receive</p>
                     </div>
                 </div>
