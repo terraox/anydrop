@@ -66,10 +66,21 @@ export default function ClassicOrbit() {
     const [deviceName, setDeviceName] = useState(() => localStorage.getItem('anydrop_device_name') || generateDeviceName());
     const [isEditingName, setIsEditingName] = useState(false);
 
-    const handleNameSave = () => {
+    const handleNameSave = async () => {
         setIsEditingName(false);
         localStorage.setItem('anydrop_device_name', deviceName);
-        toast.success('Device name updated');
+
+        // Also save to backend server-level settings
+        try {
+            const axios = (await import('axios')).default;
+            await axios.put('http://192.168.1.59:8080/api/device/name', {
+                deviceName: deviceName
+            });
+            toast.success('Device name updated on all devices!');
+        } catch (error) {
+            console.error('Failed to update server device name:', error);
+            toast.error('Saved locally, but failed to update server name');
+        }
     };
 
     const handleKeyDown = (e) => {
