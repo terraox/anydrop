@@ -8,8 +8,8 @@ import discoveryService from '../../services/discovery.service';
 export default function Devices() {
     const [sentryMode, setSentryMode] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
-    const [devices, setDevices] = useState([]);
-    const [isScanning, setIsScanning] = useState(false);
+    const [devices, setDevices] = useState(discoveryService.getDevices());
+    const [isScanning, setIsScanning] = useState(discoveryService.isScanning);
 
     useEffect(() => {
         // Subscribe to discovery updates

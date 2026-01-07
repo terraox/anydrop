@@ -5,56 +5,12 @@ import { toast } from 'sonner';
 import Ripple from '../../components/magicui/Ripple';
 import FileService from '../../services/file.service';
 import WebSocketService from '../../services/websocket.service';
+import discoveryService from '../../services/discovery.service';
 
 export default function ClassicOrbit() {
     const [isDragging, setIsDragging] = useState(false);
     const [files, setFiles] = useState([]);
     const fileInputRef = useRef(null);
-
-    React.useEffect(() => {
-        document.title = "AnyDrop";
-
-        // Connect WebSocket
-        WebSocketService.connect(() => {
-            const name = localStorage.getItem('anydrop_device_name') || generateDeviceName();
-            WebSocketService.registerDevice({ name });
-
-            // Subscribe to personal transfers
-            WebSocketService.subscribe('/user/queue/transfers', (request) => {
-                setIncomingTransfer(request);
-            });
-
-            // Subscribe to devices count
-            WebSocketService.subscribe('/user/queue/devices', (deviceList) => {
-                setNeighborCount(deviceList.length);
-            });
-        });
-
-        return () => WebSocketService.disconnect();
-    }, []);
-
-    // Transfer Request State
-    const [incomingTransfer, setIncomingTransfer] = useState(null);
-    const [neighborCount, setNeighborCount] = useState(0);
-
-    const handleAcceptTransfer = () => {
-        if (incomingTransfer?.downloadUrl) {
-            // Trigger download
-            const link = document.createElement('a');
-            link.href = incomingTransfer.downloadUrl;
-            link.download = incomingTransfer.filename; // Browser might ignore this for cross-origin
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            toast.success(`Downloading ${incomingTransfer.filename}...`);
-        }
-        setIncomingTransfer(null);
-    };
-
-    const handleRejectTransfer = () => {
-        setIncomingTransfer(null);
-        toast.info("Transfer rejected");
-    };
 
     // Device Name Logic
     const generateDeviceName = () => {
@@ -86,6 +42,80 @@ export default function ClassicOrbit() {
     const handleKeyDown = (e) => {
         if (e.key === 'Enter') handleNameSave();
     };
+
+    React.useEffect(() => {
+        document.title = "AnyDrop";
+
+        // Connect WebSocket
+        WebSocketService.connect(() => {
+            const name = localStorage.getItem('anydrop_device_name') || generateDeviceName();
+            WebSocketService.registerDevice({ name });
+
+            // Subscribe to personal transfers
+            WebSocketService.subscribe('/user/queue/transfers', (request) => {
+                setIncomingTransfer(request);
+            });
+
+            // Subscribe to WS devices (phones/clients)
+            WebSocketService.subscribe('/user/queue/devices', (deviceList) => {
+                setWsDevices(deviceList);
+            });
+        });
+
+        // Subscribe to LAN devices (other servers)
+        const handleLanUpdate = (devices) => {
+            setLanDevices(devices);
+        };
+
+        discoveryService.addListener(handleLanUpdate);
+        discoveryService.scanNetwork();
+
+        return () => {
+            WebSocketService.disconnect();
+            discoveryService.removeListener(handleLanUpdate);
+        };
+    }, []);
+
+    // Transfer Request State
+    const [incomingTransfer, setIncomingTransfer] = useState(null);
+    const [wsDevices, setWsDevices] = useState([]);
+    const [lanDevices, setLanDevices] = useState([]);
+
+    // Derived state for total unique devices
+    // Filter out ourselves (by name match or IP match)
+    const filteredWsDevices = wsDevices.filter(d => d.name !== deviceName);
+
+    // Filter LAN devices - exclude if name matches or IP matches current hostname
+    const filteredLanDevices = lanDevices.filter(d => {
+        const isSelfName = d.name === deviceName;
+        const isSelfIp = typeof window !== 'undefined' && (d.ip === window.location.hostname || d.ip === '127.0.0.1' || d.ip === 'localhost');
+        return !isSelfName && !isSelfIp;
+    });
+
+    // Deduplicate by name/ID to be safe if device appears in both lists
+    const uniqueDeviceIds = new Set([...filteredWsDevices.map(d => d.name), ...filteredLanDevices.map(d => d.name)]);
+    const neighborCount = uniqueDeviceIds.size;
+
+    const handleAcceptTransfer = () => {
+        if (incomingTransfer?.downloadUrl) {
+            // Trigger download
+            const link = document.createElement('a');
+            link.href = incomingTransfer.downloadUrl;
+            link.download = incomingTransfer.filename; // Browser might ignore this for cross-origin
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            toast.success(`Downloading ${incomingTransfer.filename}...`);
+        }
+        setIncomingTransfer(null);
+    };
+
+    const handleRejectTransfer = () => {
+        setIncomingTransfer(null);
+        toast.info("Transfer rejected");
+    };
+
+
 
     const handleDragOver = (e) => {
         e.preventDefault();

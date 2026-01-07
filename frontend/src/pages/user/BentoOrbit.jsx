@@ -4,6 +4,7 @@ import { Upload, File, X, Wifi, Plus, Laptop, Smartphone, Search, Zap, Activity,
 import { toast } from 'sonner';
 import FileService from '../../services/file.service';
 import WebSocketService from '../../services/websocket.service';
+import discoveryService from '../../services/discovery.service';
 import Logo from '../../components/ui/Logo';
 import GlassCard from '../../components/ui/GlassCard';
 import FileUpload from '../../components/ui/FileUpload';
@@ -27,18 +28,55 @@ export default function BentoOrbit() {
                 setIncomingTransfer(request);
             });
 
-            // Subscribe to Active Devices
+            // Subscribe to WS devices
             WebSocketService.subscribe('/user/queue/devices', (deviceList) => {
-                setNearbyDevices(deviceList);
+                setWsDevices(deviceList);
             });
         });
 
-        return () => WebSocketService.disconnect();
+        // Subscribe to LAN devices
+        const handleLanUpdate = (devices) => {
+            setLanDevices(devices);
+        };
+
+        discoveryService.addListener(handleLanUpdate);
+        discoveryService.scanNetwork();
+
+        return () => {
+            WebSocketService.disconnect();
+            discoveryService.removeListener(handleLanUpdate);
+        };
     }, []);
 
     // Transfer Request State
     const [incomingTransfer, setIncomingTransfer] = useState(null);
-    const [nearbyDevices, setNearbyDevices] = useState([]);
+    const [wsDevices, setWsDevices] = useState([]);
+    const [lanDevices, setLanDevices] = useState([]);
+
+    // Derived state for total unique devices
+    // Filter out ourselves and deduplicate
+    const nearbyDevices = React.useMemo(() => {
+        const filteredWs = wsDevices.filter(d => d.name !== deviceName);
+        const filteredLan = lanDevices.filter(d => {
+            const isSelfName = d.name === deviceName;
+            const isSelfIp = typeof window !== 'undefined' && (d.ip === window.location.hostname || d.ip === '127.0.0.1' || d.ip === 'localhost');
+            return !isSelfName && !isSelfIp;
+        });
+
+        // Combine and deduplicate by name
+        const combined = [...filteredWs, ...filteredLan];
+        const unique = [];
+        const seenNames = new Set();
+
+        combined.forEach(d => {
+            if (!seenNames.has(d.name)) {
+                seenNames.add(d.name);
+                unique.push(d);
+            }
+        });
+
+        return unique;
+    }, [wsDevices, lanDevices, deviceName]);
 
     const handleAcceptTransfer = () => {
         if (incomingTransfer?.downloadUrl) {

@@ -82,15 +82,23 @@ class DiscoveryService {
         if (this.isScanning) return;
 
         this.isScanning = true;
-        this.devices = [];
+        // Don't clear devices immediately to prevent flickering
+        // this.devices = []; 
         this._notifyListeners();
 
         console.log('🔍 Starting network scan...');
 
-        // Try common local network ranges
-        // We'll scan 192.168.1.x since that's the user's network
-        const subnet = '192.168.1';
+        // Detect subnet from current connection if possible
+        let subnet = '192.168.1';
+        if (typeof window !== 'undefined') {
+            const hostname = window.location.hostname;
+            if (hostname.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+                subnet = hostname.substring(0, hostname.lastIndexOf('.'));
+                console.log(`📍 Detected subnet from URL: ${subnet}`);
+            }
+        }
         const scanPromises = [];
+        const foundIds = new Set();
 
         // Scan IPs 1-254 in batches
         for (let i = 1; i <= 254; i++) {
@@ -99,11 +107,16 @@ class DiscoveryService {
                 this._probeDevice(ip).then(device => {
                     if (device) {
                         console.log(`✅ Found device: ${device.name} @ ${ip}`);
-                        // Check for duplicates
-                        if (!this.devices.find(d => d.id === device.id)) {
+                        foundIds.add(device.id);
+
+                        // Update existing or add new
+                        const existingIndex = this.devices.findIndex(d => d.id === device.id);
+                        if (existingIndex >= 0) {
+                            this.devices[existingIndex] = device;
+                        } else {
                             this.devices.push(device);
-                            this._notifyListeners();
                         }
+                        this._notifyListeners();
                     }
                 })
             );
