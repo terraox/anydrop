@@ -3,10 +3,12 @@
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/config/ThrottlingFilter.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/security/SecurityConfig.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/task/CleanupTask.java
+/Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/service/ThrottlingService.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/controller/AuthController.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/controller/IdentityController.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/projectpup/ProjectPupApplication.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/config/WebSocketConfig.java
+/Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/service/DeviceRegistryService.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/controller/RemoteControlController.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/repository/PlanRepository.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/service/EmailService.java
@@ -18,7 +20,10 @@
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/AnyDropApplication.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/security/JwtService.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/controller/DeviceSettingsController.java
+/Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/socket/BinaryStreamHandler.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/config/ApplicationConfig.java
+/Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/config/BinaryStreamConfig.java
+/Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/socket/AnyDropHandler.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/model/User.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/model/DeviceInfo.java
 /Users/aadityabasisth/Desktop/anydrop/backend/src/main/java/com/anydrop/backend/security/JwtAuthenticationFilter.java

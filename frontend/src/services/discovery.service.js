@@ -46,17 +46,25 @@ class DiscoveryService {
         const timeoutId = setTimeout(() => controller.abort(), SCAN_TIMEOUT_MS);
 
         try {
+            // Use a try-catch with silent failure for network probing
+            // These errors are expected when probing IPs that don't exist
             const response = await fetch(`http://${ip}:${BACKEND_PORT}/api/identify`, {
                 signal: controller.signal,
                 mode: 'cors',
+                // Add cache: 'no-store' to prevent caching of failed requests
+                cache: 'no-store',
             });
             clearTimeout(timeoutId);
 
             if (response.ok) {
                 const data = await response.json();
                 if (data.app === 'AnyDrop') {
+                    // Use the device ID from the response if available, otherwise fallback to IP-based ID
+                    // This is crucial for matching the WebSocket-registered device ID
+                    const deviceId = data.id || data.deviceId || `${ip}:${BACKEND_PORT}`;
+
                     return {
-                        id: `${ip}:${BACKEND_PORT}`,
+                        id: deviceId,
                         name: data.name || 'Unknown Device',
                         type: data.type?.toLowerCase() || 'laptop',
                         icon: data.icon || 'laptop',
@@ -69,7 +77,11 @@ class DiscoveryService {
             }
         } catch (e) {
             clearTimeout(timeoutId);
-            // Ignore errors - device unreachable or not AnyDrop
+            // Silently ignore errors - this is expected behavior when:
+            // - Device is unreachable (ERR_ADDRESS_UNREACHABLE)
+            // - Request timed out (AbortError)
+            // - Device is not running AnyDrop
+            // No logging needed here as these are expected during subnet scanning
         }
         return null;
     }

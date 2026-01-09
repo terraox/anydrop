@@ -12,7 +12,8 @@ import java.util.Objects;
 @NoArgsConstructor
 @AllArgsConstructor
 public class DeviceInfo {
-    private String sessionId;
+    private String id; // Persistent device ID (UUID)
+    private String sessionId; // Current WebSocket session ID
     private String name;
     private String model;
     private String type; // PHONE, DESKTOP
@@ -26,11 +27,15 @@ public class DeviceInfo {
         if (o == null || getClass() != o.getClass())
             return false;
         DeviceInfo that = (DeviceInfo) o;
+        // Primary identity is based on persistent ID if available, otherwise session
+        if (id != null && that.id != null) {
+            return Objects.equals(id, that.id);
+        }
         return Objects.equals(sessionId, that.sessionId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(sessionId);
+        return Objects.hash(id != null ? id : sessionId);
     }
 }

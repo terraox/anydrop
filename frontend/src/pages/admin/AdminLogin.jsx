@@ -2,13 +2,11 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, Loader2, AlertTriangle, Shield, Sun, Moon } from 'lucide-react';
-import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from 'next-themes';
 import Logo from '../../components/ui/Logo';
 import { ShineBorder } from '../../components/magicui/ShineBorder';
-
-const API_URL = "http://localhost:8080/api/auth/login";
+import api from '../../services/api';
 
 export default function AdminLogin() {
     const [loading, setLoading] = useState(false);
@@ -42,7 +40,7 @@ export default function AdminLogin() {
         // --------------------------------------
 
         try {
-            const response = await axios.post(API_URL, { email, password });
+            const response = await api.post('/auth/login', { email, password });
 
             if (response.status === 200 && response.data.token) {
                 const { token, email: userEmail, role, plan, username, avatar } = response.data;

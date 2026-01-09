@@ -17,6 +17,7 @@ class HttpServerService {
   Future<void> startServer({
     required String deviceName,
     required String deviceIcon,
+    String? deviceId,
   }) async {
     if (_isRunning) return;
 
@@ -27,13 +28,15 @@ class HttpServerService {
           .addMiddleware(_corsMiddleware())
           .addHandler((request) {
         if (request.url.path == 'api/identify') {
-          // Return device identity
+          // Return device identity including the deviceId for transfer routing
           final response = {
             'app': 'AnyDrop',
             'name': deviceName,
             'icon': deviceIcon,
             'type': 'PHONE',
             'version': '1.0.0',
+            'id': deviceId, // Include device ID for frontend discovery
+            'deviceId': deviceId, // Alternative key for compatibility
           };
 
           return shelf.Response.ok(
@@ -61,9 +64,10 @@ class HttpServerService {
   Future<void> updateDevice({
     required String deviceName,
     required String deviceIcon,
+    String? deviceId,
   }) async {
     await stopServer();
-    await startServer(deviceName: deviceName, deviceIcon: deviceIcon);
+    await startServer(deviceName: deviceName, deviceIcon: deviceIcon, deviceId: deviceId);
   }
 
   /// Stop the HTTP server

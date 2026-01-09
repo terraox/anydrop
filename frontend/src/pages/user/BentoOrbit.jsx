@@ -3,13 +3,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, File, X, Wifi, Plus, Laptop, Smartphone, Search, Zap, Activity, Clock, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import FileService from '../../services/file.service';
-import WebSocketService from '../../services/websocket.service';
+import TransferService from '../../services/transfer.service';
 import discoveryService from '../../services/discovery.service';
 import Logo from '../../components/ui/Logo';
 import GlassCard from '../../components/ui/GlassCard';
 import FileUpload from '../../components/ui/FileUpload';
 import { fireSideCannons } from '../../components/magicui/Confetti';
 import { useSoundEffects } from '../../hooks/useSoundEffects';
+import DeviceSelectionModal from './DeviceSelectionModal';
+import api from '../../services/api';
 
 export default function BentoOrbit() {
     const [files, setFiles] = useState([]);
@@ -32,7 +34,7 @@ export default function BentoOrbit() {
         // Also save to backend server-level settings
         try {
             const axios = (await import('axios')).default;
-            await axios.put('http://192.168.1.59:8080/api/device/name', {
+            await api.put('/device/name', {
                 deviceName: deviceName
             });
             toast.success('Device name updated on all devices!');
@@ -70,11 +72,28 @@ export default function BentoOrbit() {
             setLanDevices(devices);
         };
 
+        const name = localStorage.getItem('anydrop_device_name') || generateDeviceName();
+        TransferService.connect(name);
+
+        TransferService.onProgress = (transferId, progress) => {
+            setFiles(prev => prev.map(f =>
+                f.id === transferId ? { ...f, progress: Math.round(progress * 100), status: progress >= 1 ? 'sent' : 'uploading' } : f
+            ));
+        };
+
+        TransferService.onError = (message) => {
+            toast.error(`Transfer Issue: ${message}`);
+            setFiles(prev => prev.map(f =>
+                f.status === 'uploading' ? { ...f, status: 'error' } : f
+            ));
+        };
+
         discoveryService.addListener(handleLanUpdate);
         discoveryService.scanNetwork();
 
         return () => {
             WebSocketService.disconnect();
+            TransferService.disconnect();
             discoveryService.removeListener(handleLanUpdate);
         };
     }, []);
@@ -145,47 +164,64 @@ export default function BentoOrbit() {
         }));
 
         setFiles(prev => [...prev, ...newFiles]);
+
+        // Open device selection modal
+        if (newFiles.length > 0) {
+            setPendingTransferFiles(newFiles);
+            setIsDeviceModalOpen(true);
+        }
+
         toast.info(`Initiating upload for ${newFiles.length} files...`);
         playUploadStart(); // 🔊 Start sound
 
-        for (const fileData of newFiles) {
+        // Upload each file in the background (fire and forget for history)
+        newFiles.forEach(async (fileData) => {
             try {
-                await FileService.uploadFile(fileData.fileObject, (progress) => {
-                    setFiles(prev => prev.map(f =>
-                        f.id === fileData.id ? { ...f, progress } : f
-                    ));
-                })
-                    .then(response => {
-                        setFiles(prev => prev.map(f =>
-                            f.id === fileData.id ? {
-                                ...f,
-                                status: 'sent',
-                                progress: 100,
-                                id: response.data?.id || f.id
-                            } : f
-                        ));
-                        toast.success(`${fileData.name} uploaded successfully!`);
-                        fireSideCannons(); // 🎉 Celebration!
-                        playUploadSuccess(); // 🔊 Success sound
-                    });
-
+                // Background HTTP upload for server-side history
+                await FileService.uploadFile(fileData.fileObject);
             } catch (error) {
-                console.error("Upload failed", error);
-                setFiles(prev => prev.map(f =>
-                    f.id === fileData.id ? { ...f, status: 'error' } : f
-                ));
-                toast.error(`Failed to upload ${fileData.name}`);
-                playUploadError(); // 🔊 Error sound
+                console.warn("Background history upload failed", error);
             }
-        }
+        });
     };
 
     const removeFile = (id) => {
         setFiles(files.filter(f => f.id !== id));
     };
 
+    // --- TRANSFER LOGIC ---
+    const [isDeviceModalOpen, setIsDeviceModalOpen] = useState(false);
+    const [pendingTransferFiles, setPendingTransferFiles] = useState([]);
+    const [selectedTargetDevice, setSelectedTargetDevice] = useState(null);
+
+    const handleDeviceSelect = (device) => {
+        setIsDeviceModalOpen(false);
+        setSelectedTargetDevice(device);
+
+        if (pendingTransferFiles.length > 0) {
+            toast.success(`Broadcasting to ${device.name}...`);
+            pendingTransferFiles.forEach(file => {
+                TransferService.enqueueFile(
+                    device.id || device.name,
+                    file.fileObject,
+                    file.id
+                );
+            });
+            // Clear pending after initiating
+            setPendingTransferFiles([]);
+        }
+    };
+
+
     return (
         <div className="p-6 pb-32 h-full w-full overflow-y-auto flex flex-col">
+            <DeviceSelectionModal
+                isOpen={isDeviceModalOpen}
+                onClose={() => setIsDeviceModalOpen(false)}
+                devices={nearbyDevices}
+                onSelect={handleDeviceSelect}
+            />
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-7xl mx-auto w-full flex-1">
 
                 {/* Header - Mobile */}

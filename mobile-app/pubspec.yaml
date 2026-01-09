@@ -45,6 +45,10 @@ dependencies:
   # HTTP Server (for web app to discover phone)
   shelf: ^1.4.0
 
+  # File System & Permissions
+  path_provider: ^2.1.2
+  permission_handler: ^11.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

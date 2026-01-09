@@ -44,6 +44,18 @@ public class TransferController {
         messagingTemplate.convertAndSendToUser(principal.getName(), "/queue/transfers", request);
     }
 
+    @MessageMapping("/transfer.response")
+    public void respondTransfer(@Payload TransferResponse response, Principal principal) {
+        if (principal == null)
+            return;
+
+        log.info("Transfer response from {} (TransferID: {}): Accepted={}",
+                principal.getName(), response.getTransferId(), response.isAccepted());
+
+        // Notify the Sender (which is also the user in this Orbit context)
+        messagingTemplate.convertAndSendToUser(principal.getName(), "/queue/transfer.status", response);
+    }
+
     @Data
     @Builder
     public static class TransferRequest {
@@ -53,5 +65,15 @@ public class TransferController {
         private String fileType;
         private String downloadUrl; // URL to download the file from backend
         private String sender; // Populated by backend
+    }
+
+    @Data
+    @Builder
+    @lombok.AllArgsConstructor
+    @lombok.NoArgsConstructor
+    public static class TransferResponse {
+        private String transferId;
+        private boolean accepted;
+        private String targetDeviceId;
     }
 }

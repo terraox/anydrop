@@ -5,7 +5,7 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import NumberTicker from '../../components/magicui/NumberTicker';
-import axios from 'axios';
+import api from '../../services/api';
 import { toast } from 'sonner';
 
 export default function Pricing() {
@@ -28,7 +28,7 @@ export default function Pricing() {
     const fetchConfig = async () => {
         setIsLoading(true);
         try {
-            const response = await axios.get('http://localhost:8080/api/tools/config');
+            const response = await api.get('/tools/config');
             const configs = response.data;
 
             configs.forEach(config => {

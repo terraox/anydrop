@@ -1,11 +1,11 @@
 /// API and WebSocket constants for AnyDrop
 class ApiConstants {
   // Backend Base URL
-  static const String baseUrl = 'http://192.168.1.59:8080';
+  static const String baseUrl = 'http://192.168.1.2:8080';
   static const String apiUrl = '$baseUrl/api';
 
   // WebSocket Endpoints
-  static const String wsUrl = 'ws://192.168.1.59:8080/ws';
+  static const String wsUrl = 'ws://192.168.1.2:8080/ws';
   static const String wsTransfer = '$wsUrl/transfer';
   static const String wsTrackpad = '$wsUrl/trackpad';
 

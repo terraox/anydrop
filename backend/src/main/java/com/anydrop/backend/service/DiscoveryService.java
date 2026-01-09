@@ -41,7 +41,7 @@ public class DiscoveryService {
             // Get local IP address - forcing LAN IP to ensure network visibility
             // InetAddress localhost = InetAddress.getLocalHost(); // This often returns
             // 127.0.0.1 on macOS
-            InetAddress localhost = InetAddress.getByName("192.168.1.59");
+            InetAddress localhost = InetAddress.getByName("192.168.1.2");
             jmdns = JmDNS.create(localhost);
 
             // Define service metadata (TXT records)

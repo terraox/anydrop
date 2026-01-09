@@ -10,9 +10,55 @@ import Dock from '../components/ui/Dock';
 import { AnimatePresence } from 'framer-motion';
 import PageTransition from '../components/ui/PageTransition';
 import { GridPattern } from '../components/ui/GridPattern';
+import WebSocketService from '../services/websocket.service';
+import TransferService from '../services/transfer.service';
+import { useAuth } from '../context/AuthContext';
+import { toast } from 'sonner';
 
 export default function DashboardLayout() {
   const location = useLocation();
+  const { user } = useAuth();
+
+  React.useEffect(() => {
+    if (user) {
+      // Generate a unique device ID for this browser instance
+      let webDeviceId = localStorage.getItem('anydrop_web_device_id');
+      if (!webDeviceId) {
+        webDeviceId = `web-${crypto.randomUUID()}`;
+        localStorage.setItem('anydrop_web_device_id', webDeviceId);
+      }
+
+      // Connect to unified transfer endpoint (for sending files to mobile)
+      TransferService.connect(webDeviceId);
+
+      // Connect to STOMP for other features
+      WebSocketService.connect(() => {
+        // Register this browser instance
+        WebSocketService.registerDevice({ name: user.username ? `${user.username}'s Browser` : 'Web Client' });
+
+        // Subscribe to incoming transfers (from mobile to web)
+        WebSocketService.subscribe('/user/queue/transfers', (data) => {
+          console.log("📥 Incoming Transfer:", data);
+
+          toast.message(`Incoming File: ${data.filename}`, {
+            description: `From: ${data.sender}`,
+            action: {
+              label: 'Download',
+              onClick: () => {
+                window.open(data.downloadUrl, '_blank');
+              },
+            },
+            duration: Infinity, // Stay until clicked or dismissed
+          });
+        });
+      });
+    }
+
+    return () => {
+      WebSocketService.disconnect();
+      TransferService.disconnect();
+    };
+  }, [user]);
   return (
     <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans selection:bg-violet-500/30 relative">
       {/* Global Background Grid */}
@@ -46,7 +92,6 @@ export default function DashboardLayout() {
       </div>
 
       {/* Global Toasts */}
-      <Toaster position="bottom-right" theme="system" />
       <Toaster position="bottom-right" theme="system" />
       <CommandPalette />
       <div className="hidden md:block">

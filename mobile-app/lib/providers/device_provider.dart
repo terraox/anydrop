@@ -6,10 +6,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../core/utils/device_utils.dart';
 import '../models/device.dart';
+import '../models/file_transfer.dart';
 import '../services/websocket_service.dart';
 import '../services/broadcast_service.dart';
 import '../services/http_server_service.dart';
+import '../services/file_stream_service.dart';
 import 'discovery_provider.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 /// Quick save mode for automatic file saving
 enum QuickSaveMode { off, favourites, on }
@@ -25,6 +30,7 @@ class DeviceProvider extends ChangeNotifier {
   final WebSocketService _wsService = WebSocketService();
   final BroadcastService _broadcastService = BroadcastService();
   final HttpServerService _httpServer = HttpServerService();
+  final FileStreamService _fileStreamService = FileStreamService();
   final DiscoveryProvider _discoveryProvider = DiscoveryProvider();
 
   String _deviceName = '';
@@ -34,6 +40,9 @@ class DeviceProvider extends ChangeNotifier {
   QuickSaveMode _quickSaveMode = QuickSaveMode.off;
   bool _isScanning = false;
   bool _isConnected = false;
+  FileTransfer? _incomingTransfer;
+  double _transferProgress = 0.0;
+  bool _isTransferring = false;
 
   // Getters
   String get deviceName => _deviceName;
@@ -42,6 +51,9 @@ class DeviceProvider extends ChangeNotifier {
   QuickSaveMode get quickSaveMode => _quickSaveMode;
   bool get isScanning => _isScanning || _discoveryProvider.isScanning;
   bool get isConnected => _isConnected;
+  FileTransfer? get incomingTransfer => _incomingTransfer;
+  double get transferProgress => _transferProgress;
+  bool get isTransferring => _isTransferring;
   WebSocketService get wsService => _wsService;
   DiscoveryProvider get discoveryProvider => _discoveryProvider;
 
@@ -128,6 +140,7 @@ class DeviceProvider extends ChangeNotifier {
     await _httpServer.startServer(
       deviceName: _deviceName,
       deviceIcon: _deviceIcon,
+      deviceId: _deviceId,
     );
     
     // Start discovering other devices
@@ -139,8 +152,35 @@ class DeviceProvider extends ChangeNotifier {
       _isConnected = connected;
       if (connected) {
         _registerDevice();
+        _setupTransferListener();
       }
       notifyListeners();
+    });
+  }
+
+  void _setupTransferListener() {
+    _wsService.subscribe('/user/queue/transfers', (frame) {
+      if (frame.body != null) {
+        try {
+          final data = jsonDecode(frame.body!);
+          final transfer = FileTransfer.fromJson(data);
+          
+          // Check if this transfer is for us
+          debugPrint('📥 Received transfer request: ${transfer.name} for ${transfer.targetDeviceId}');
+          
+          if (transfer.targetDeviceId != null && 
+              transfer.targetDeviceId != _deviceId) {
+            debugPrint('🚫 Ignoring transfer for different device: ${transfer.targetDeviceId}');
+            return; // Not for us
+          }
+          
+          _incomingTransfer = transfer;
+          notifyListeners();
+          debugPrint('✅ Incoming transfer accepted for prompt: ${transfer.name}');
+        } catch (e) {
+          debugPrint('❌ Error parsing transfer request: $e');
+        }
+      }
     });
   }
 
@@ -158,6 +198,7 @@ class DeviceProvider extends ChangeNotifier {
     }
     
     _wsService.send('/app/device.register', {
+      'id': _deviceId,
       'name': _deviceName,
       'model': model,
       'type': type,
@@ -183,6 +224,7 @@ class DeviceProvider extends ChangeNotifier {
     await _httpServer.updateDevice(
       deviceName: name,
       deviceIcon: _deviceIcon,
+      deviceId: _deviceId,
     );
     
     // Update WebSocket identity if connected
@@ -213,6 +255,7 @@ class DeviceProvider extends ChangeNotifier {
     await _httpServer.updateDevice(
       deviceName: _deviceName,
       deviceIcon: icon,
+      deviceId: _deviceId,
     );
   }
 
@@ -247,6 +290,81 @@ class DeviceProvider extends ChangeNotifier {
   void stopScanning() {
     _isScanning = false;
     notifyListeners();
+  }
+  
+  void clearIncomingTransfer() {
+    _incomingTransfer = null;
+    notifyListeners();
+  }
+
+  Future<void> acceptTransfer() async {
+    if (_incomingTransfer != null) {
+      final transfer = _incomingTransfer!;
+      
+      // Logic to accept transfer - sending response back to sender
+      final response = {
+        'transferId': transfer.id,
+        'accepted': true,
+        'targetDeviceId': _deviceId
+      };
+      _wsService.send('/app/transfer.response', response);
+      
+      // Start Streaming Receive
+      _isTransferring = true;
+      _transferProgress = 0.0;
+      notifyListeners();
+      
+      // Request permission
+      var status = await Permission.storage.request();
+       if (status.isDenied) {
+        status = await Permission.manageExternalStorage.request();
+      }
+      
+      if (status.isGranted || await Permission.storage.isGranted || await Permission.manageExternalStorage.isGranted) {
+           _fileStreamService.onProgress = (progress) {
+              _transferProgress = progress;
+              notifyListeners();
+           };
+           
+           _fileStreamService.onComplete = (path) {
+              _isTransferring = false;
+              _transferProgress = 1.0;
+              notifyListeners();
+              debugPrint("✅ Transfer Complete: $path");
+           };
+           
+           _fileStreamService.onError = (error) {
+              _isTransferring = false;
+              notifyListeners();
+              debugPrint("❌ Transfer Error: $error");
+           };
+
+           await _fileStreamService.receiveFile(transfer.id, transfer.name, transfer.sizeBytes);
+      } else {
+        debugPrint("❌ Permission Denied");
+        _isTransferring = false;
+        notifyListeners();
+      }
+      
+      // Clear dialog immediately (UI handles progress elsewhere?)
+      _incomingTransfer = null; 
+      notifyListeners();
+    }
+  }
+
+  // Removed _downloadFile as we use FileStreamService now
+
+  void rejectTransfer() {
+     if (_incomingTransfer != null) {
+      final response = {
+        'transferId': _incomingTransfer!.id,
+        'accepted': false,
+        'targetDeviceId': _deviceId
+      };
+      _wsService.send('/app/transfer.response', response);
+      _incomingTransfer = null;
+      notifyListeners();
+    }
   }
 
   void refreshDevices() {

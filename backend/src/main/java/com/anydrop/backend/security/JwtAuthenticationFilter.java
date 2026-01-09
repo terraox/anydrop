@@ -28,10 +28,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain) throws ServletException, IOException {
+
+        String path = request.getRequestURI();
+        System.out.println("🔍 JWT Filter: " + request.getMethod() + " " + path);
+
         final String authHeader = request.getHeader("Authorization");
         final String jwt;
         final String userEmail;
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            System.out.println("✓ No JWT token, passing through: " + path);
             filterChain.doFilter(request, response);
             return;
         }

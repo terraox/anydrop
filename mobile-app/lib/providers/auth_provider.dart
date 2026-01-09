@@ -7,10 +7,12 @@ class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
 
   User? _user;
+  String? _token;
   bool _isLoading = true;
   bool _isAuthenticated = false;
-
+  
   User? get user => _user;
+  String? get token => _token;
   bool get isLoading => _isLoading;
   bool get isAuthenticated => _isAuthenticated;
   UserPlan get plan => _user?.plan ?? UserPlan.scout;
@@ -28,6 +30,7 @@ class AuthProvider extends ChangeNotifier {
       final isLoggedIn = await _authService.isLoggedIn();
       if (isLoggedIn) {
         _user = await _authService.getUser();
+        _token = await _authService.getToken();
         _isAuthenticated = _user != null;
       }
     } catch (e) {
@@ -46,6 +49,7 @@ class AuthProvider extends ChangeNotifier {
       final user = await _authService.login(email, password);
       if (user != null) {
         _user = user;
+        _token = await _authService.getToken();
         _isAuthenticated = true;
         _isLoading = false;
         notifyListeners();
@@ -68,6 +72,7 @@ class AuthProvider extends ChangeNotifier {
       final user = await _authService.register(email, password, username);
       if (user != null) {
         _user = user;
+        _token = await _authService.getToken();
         _isAuthenticated = true;
         _isLoading = false;
         notifyListeners();
@@ -85,6 +90,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     await _authService.logout();
     _user = null;
+    _token = null;
     _isAuthenticated = false;
     notifyListeners();
   }

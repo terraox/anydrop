@@ -4,8 +4,11 @@ import { Upload, File, X, Wifi, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import Ripple from '../../components/magicui/Ripple';
 import FileService from '../../services/file.service';
+import TransferService from '../../services/transfer.service';
 import WebSocketService from '../../services/websocket.service';
 import discoveryService from '../../services/discovery.service';
+import DeviceSelectionModal from './DeviceSelectionModal';
+import api from '../../services/api';
 
 export default function ClassicOrbit() {
     const [isDragging, setIsDragging] = useState(false);
@@ -29,7 +32,7 @@ export default function ClassicOrbit() {
         // Also save to backend server-level settings
         try {
             const axios = (await import('axios')).default;
-            await axios.put('http://192.168.1.59:8080/api/device/name', {
+            await api.put('/device/name', {
                 deviceName: deviceName
             });
             toast.success('Device name updated on all devices!');
@@ -67,11 +70,30 @@ export default function ClassicOrbit() {
             setLanDevices(devices);
         };
 
+        const name = localStorage.getItem('anydrop_device_name') || generateDeviceName();
+        // connect is now safe to call multiple times as it checks readyState
+        TransferService.connect(name);
+
+        TransferService.onProgress = (transferId, progress) => {
+            setFiles(prev => prev.map(f =>
+                f.id === transferId ? { ...f, progress: Math.round(progress * 100), status: progress >= 1 ? 'sent' : 'uploading' } : f
+            ));
+        };
+
+        TransferService.onError = (message) => {
+            toast.error(`Transfer Issue: ${message}`);
+            // Update any files that might have been in progress
+            setFiles(prev => prev.map(f =>
+                f.status === 'uploading' ? { ...f, status: 'error' } : f
+            ));
+        };
+
         discoveryService.addListener(handleLanUpdate);
         discoveryService.scanNetwork();
 
         return () => {
             WebSocketService.disconnect();
+            TransferService.disconnect();
             discoveryService.removeListener(handleLanUpdate);
         };
     }, []);
@@ -98,6 +120,30 @@ export default function ClassicOrbit() {
     // Deduplicate by name/ID to be safe if device appears in both lists
     const uniqueDeviceIds = new Set([...filteredWsDevices.map(d => d.name), ...filteredLanDevices.map(d => d.name)]);
     const neighborCount = uniqueDeviceIds.size;
+
+    // --- TRANSFER LOGIC ---
+    const [isDeviceModalOpen, setIsDeviceModalOpen] = useState(false);
+    const [pendingTransferFiles, setPendingTransferFiles] = useState([]);
+    const [selectedTargetDevice, setSelectedTargetDevice] = useState(null);
+
+    const handleDeviceSelect = (device) => {
+        setIsDeviceModalOpen(false);
+        setSelectedTargetDevice(device);
+
+        if (pendingTransferFiles.length > 0) {
+            toast.success(`Broadcasting to ${device.name}...`);
+            pendingTransferFiles.forEach(file => {
+                TransferService.enqueueFile(
+                    device.id || device.name,
+                    file.fileObject,
+                    file.id
+                );
+            });
+            // Clear pending after initiating
+            setPendingTransferFiles([]);
+        }
+    };
+
 
     const handleAcceptTransfer = () => {
         if (incomingTransfer?.downloadUrl) {
@@ -152,37 +198,28 @@ export default function ClassicOrbit() {
         }));
 
         setFiles(prev => [...prev, ...newFiles]);
+
+        // Open device selection modal immediately for the first file (or all)
+        // For simplicity, we'll assume batch send to SAME device, or just prompt.
+        // Let's set the first file as the "primary" one initiating the transfer context
+        if (newFiles.length > 0) {
+            setPendingTransferFiles(newFiles); // Track files waiting for target
+            setIsDeviceModalOpen(true);
+        }
+
         toast.info(`Initiating upload for ${newFiles.length} files...`);
 
-        // Upload each file
-        for (const fileData of newFiles) {
+        // Upload each file in the background (fire and forget for history)
+        newFiles.forEach(async (fileData) => {
             try {
-                await FileService.uploadFile(fileData.fileObject, (progress) => {
-                    setFiles(prev => prev.map(f =>
-                        f.id === fileData.id ? { ...f, progress } : f
-                    ));
-                })
-                    .then(response => {
-                        // Success - Update with real data from server if available, or just mark sent
-                        setFiles(prev => prev.map(f =>
-                            f.id === fileData.id ? {
-                                ...f,
-                                status: 'sent',
-                                progress: 100,
-                                id: response.data?.id || f.id // Use real ID if returned
-                            } : f
-                        ));
-                        toast.success(`${fileData.name} uploaded successfully!`);
-                    });
-
+                // Background HTTP upload for server-side history
+                await FileService.uploadFile(fileData.fileObject);
             } catch (error) {
-                console.error("Upload failed", error);
-                setFiles(prev => prev.map(f =>
-                    f.id === fileData.id ? { ...f, status: 'error' } : f
-                ));
-                toast.error(`Failed to upload ${fileData.name}`);
+                console.warn("Background history upload failed", error);
+                // We don't toast here to avoid spamming the user if P2P is working
+                // But we could log it or update a small indicator
             }
-        }
+        });
     };
 
     const removeFile = (id) => {
@@ -219,6 +256,15 @@ export default function ClassicOrbit() {
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
         >
+
+            {/* --- Device Selection Modal --- */}
+            <DeviceSelectionModal
+                isOpen={isDeviceModalOpen}
+                onClose={() => setIsDeviceModalOpen(false)}
+                devices={neighborCount > 0 ? [...filteredWsDevices, ...filteredLanDevices] : []}
+                onSelect={handleDeviceSelect}
+            />
+
             {/* Hidden File Input */}
             <input
                 type="file"
@@ -466,6 +512,6 @@ export default function ClassicOrbit() {
                 </div>
             </div>
 
-        </div>
+        </div >
     );
 }

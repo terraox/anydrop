@@ -2,9 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AuthLayout from "../../layout/AuthLayout";
 import { Mail, User, Building2, Phone, ArrowRight, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import axios from 'axios';
-
-const API_URL = "http://localhost:8080/api/auth/register";
+import api from '../../services/api';
 
 export default function Register() {
     const [loading, setLoading] = useState(false);
@@ -28,7 +26,7 @@ export default function Register() {
         setError(null);
 
         try {
-            const response = await axios.post(API_URL, formData);
+            const response = await api.post('/auth/register', formData);
 
             if (response.status === 200 || response.status === 201) {
                 setSuccess(true);

@@ -23,4 +23,12 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.addEndpoint("/ws").setAllowedOriginPatterns("*").withSockJS();
         registry.addEndpoint("/ws").setAllowedOriginPatterns("*");
     }
+
+    @Override
+    public void configureWebSocketTransport(
+            org.springframework.web.socket.config.annotation.WebSocketTransportRegistration registration) {
+        registration.setSendTimeLimit(20 * 1000);
+        registration.setSendBufferSizeLimit(512 * 1024 * 1024); // 512MB
+        registration.setMessageSizeLimit(512 * 1024 * 1024); // 512MB
+    }
 }

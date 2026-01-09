@@ -3,12 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 // FIXED: Go up two levels to find components
 import AuthLayout from '../../layout/AuthLayout';
 import { Mail, Lock, ArrowRight, Loader2, AlertTriangle } from 'lucide-react';
-import axios from 'axios';
-// FIXED: Go up two levels to find context
 import { useAuth } from '../../context/AuthContext';
+import api from '../../services/api';
 
-// Ensure your backend allows CORS from this origin
-const API_URL = "http://localhost:8080/api/auth/login";
+// Use dynamic API URL from centralized config
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
@@ -23,25 +21,16 @@ export default function Login() {
     setLoading(true);
     setError(null);
 
-    // --- MOCK ADMIN LOGIN (FOR TESTING) ---
-    if (email === "admin@anydrop.com" && password === "admin") {
-      setTimeout(() => {
-        login("mock-admin-token-123", {
-          email: "admin@anydrop.com",
-          role: "ADMIN",
-          plan: "PRO_MAX", // Fancy plan for testing
-          username: "ThePuppeteer",
-          avatar: "https://api.dicebear.com/9.x/pixel-art/svg?seed=AdminBoss"
-        });
-        navigate('/'); // Redirect to Dashboard (Orbit) for now, or /admin if exists
-        setLoading(false);
-      }, 800); // Fake network delay
-      return;
-    }
-    // --------------------------------------
+    // Mock login removed - using real backend API now
 
     try {
-      const response = await axios.post(API_URL, { email, password });
+      console.log('🔐 Attempting login for:', email);
+      console.log('📡 API Base URL:', api.defaults.baseURL);
+      console.log('🌐 Current Origin:', window.location.origin);
+      console.log('🔗 Full URL:', window.location.href);
+      
+      const response = await api.post('/auth/login', { email, password });
+      console.log('✅ Login response received:', response.status);
 
       if (response.status === 200 && response.data.token) {
         // Extract all fields, including the new Identity fields
@@ -55,13 +44,22 @@ export default function Login() {
         } = response.data;
 
         // 1. Update Global Context State with Identity Data
-        login(token, {
-          email: userEmail,
-          role,
-          plan,
-          username,
-          avatar
-        });
+        console.log("Login successful! Token:", token);
+        // alert(`DEBUG: Login Success! \nToken: ${token.substring(0, 10)}...`);
+
+        try {
+          login(token, {
+            email: userEmail,
+            role,
+            plan,
+            username,
+            avatar
+          });
+          // alert("DEBUG: Context Updated. Redirecting...");
+        } catch (e) {
+          console.error("Context update failed:", e);
+          alert("DEBUG: Context update failed: " + e.message);
+        }
 
         // 2. Redirect based on role
         if (role === 'ADMIN') {
@@ -73,12 +71,28 @@ export default function Login() {
         setError("Invalid response from server.");
       }
     } catch (err) {
-      if (err.response && err.response.status === 403) {
-        setError(err.response.data || "Your account has been banned. Please contact admin.");
-      } else if (err.response && err.response.status === 401) {
-        setError("Invalid email or password.");
+      console.error('Login error:', err);
+      
+      if (err.response) {
+        // Server responded with error
+        if (err.response.status === 401) {
+          setError("Invalid email or password.");
+        } else if (err.response.status === 403) {
+          setError(err.response.data?.message || "Access denied. Your account may be suspended.");
+        } else if (err.response.status === 500) {
+          setError("Server error. Please try again later.");
+        } else {
+          const errorMessage = err.response.data?.message || 
+                             (typeof err.response.data === 'string' ? err.response.data : null) ||
+                             `Server Error: ${err.response.status}`;
+          setError(errorMessage);
+        }
+      } else if (err.request) {
+        // Request was made but no response received
+        setError("Unable to connect to server. Please ensure the backend is running on port 8080.");
       } else {
-        setError("Login failed. Check server connection.");
+        // Error setting up the request
+        setError(err.message || "Login failed. Please check your connection and try again.");
       }
     } finally {
       setLoading(false);

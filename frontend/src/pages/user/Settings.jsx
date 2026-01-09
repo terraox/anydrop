@@ -102,7 +102,7 @@ export default function Settings() {
 
     useEffect(() => {
         // Load device name using direct axios (not api) to avoid auth
-        axios.get('http://192.168.1.59:8080/api/device/identity')
+        api.get('/device/identity')
             .then(res => setDeviceName(res.data.deviceName))
             .catch(err => console.error('Failed to load device name:', err));
     }, []);
@@ -154,7 +154,7 @@ export default function Settings() {
         try {
             // Use axios directly (not api) to avoid sending auth token
             // /api/device/** is a public endpoint
-            const response = await axios.put('http://192.168.1.59:8080/api/device/name', {
+            const response = await api.put('/device/name', {
                 deviceName: deviceName.trim()
             });
             toast.success('Device name updated! Other devices will see the new name.');
