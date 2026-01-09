@@ -98,4 +98,13 @@ public class FileStorageService {
             throw new RuntimeException("File not found " + fileName, ex);
         }
     }
+
+    public void deleteFileIfExists(String storedFilename) {
+        try {
+            Path filePath = this.fileStorageLocation.resolve(storedFilename).normalize();
+            Files.deleteIfExists(filePath);
+        } catch (IOException e) {
+            log.warn("Failed to delete file {}: {}", storedFilename, e.getMessage());
+        }
+    }
 }

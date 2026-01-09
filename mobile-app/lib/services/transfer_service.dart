@@ -359,9 +359,11 @@ class TransferService extends ChangeNotifier {
         
         // For Android: Add to MediaStore if it's an image or video and saveToGallery is enabled
         if (Platform.isAndroid && _saveToGallery) {
-          if (FileUtils.isImage(fileName) || FileUtils.isVideo(fileName)) {
-            try {
-              final bytes = await _receivingFile!.readAsBytes();
+          try {
+            final bytes = await _receivingFile!.readAsBytes();
+            
+            if (FileUtils.isImage(fileName)) {
+              // Save image to gallery
               final result = await ImageGallerySaver.saveImage(
                 bytes,
                 name: fileName,
@@ -369,14 +371,30 @@ class TransferService extends ChangeNotifier {
               );
               
               if (result['isSuccess'] == true) {
-                debugPrint('✅ File added to gallery: ${result['filePath']}');
+                debugPrint('✅ Image added to gallery: ${result['filePath']}');
               } else {
-                debugPrint('⚠️ Failed to add file to gallery, but file is saved');
+                debugPrint('⚠️ Failed to add image to gallery, but file is saved at: ${_receivingFile!.path}');
               }
-            } catch (e) {
-              debugPrint('⚠️ Error adding to gallery: $e (file is still saved)');
+            } else if (FileUtils.isVideo(fileName)) {
+              // Save video to gallery
+              final result = await ImageGallerySaver.saveVideo(
+                bytes,
+                name: fileName,
+                isReturnImagePathOfIOS: false,
+              );
+              
+              if (result['isSuccess'] == true) {
+                debugPrint('✅ Video added to gallery: ${result['filePath']}');
+              } else {
+                debugPrint('⚠️ Failed to add video to gallery, but file is saved at: ${_receivingFile!.path}');
+              }
             }
+          } catch (e) {
+            debugPrint('⚠️ Error adding to gallery: $e (file is still saved at: ${_receivingFile!.path})');
           }
+        } else {
+          // File is saved but not added to gallery (either not Android, or saveToGallery is false)
+          debugPrint('📂 File saved to: ${_receivingFile!.path} (not added to gallery)');
         }
         
         // Try to open the file (optional - can be disabled)

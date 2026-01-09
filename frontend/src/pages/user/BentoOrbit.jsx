@@ -13,10 +13,17 @@ import { useSoundEffects } from '../../hooks/useSoundEffects';
 import DeviceSelectionModal from './DeviceSelectionModal';
 import { useDeviceName } from '../../context/DeviceNameContext';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 export default function BentoOrbit() {
     const [files, setFiles] = useState([]);
     const { playUploadStart, playUploadSuccess, playUploadError } = useSoundEffects();
+    const { user, isAuthenticated } = useAuth();
+    const isPro = user?.plan === 'PRO' || user?.plan === 'TITAN';
+    const [upgradePrompt, setUpgradePrompt] = useState(null);
+    const { user, isAuthenticated } = useAuth();
+    const isPro = user?.plan === 'PRO' || user?.plan === 'TITAN';
+    const [upgradePrompt, setUpgradePrompt] = useState(null);
 
     // Device Name Logic - Using centralized context
     const { deviceName, updateDeviceName } = useDeviceName();
@@ -85,6 +92,18 @@ export default function BentoOrbit() {
         // Handle completed transfers
         TransferService.onTransferComplete = (transferId, fileName) => {
             toast.success(`File received: ${fileName}`);
+        };
+
+        TransferService.onUpgradeRequired = (message) => {
+            const msg = message?.message || 'Free plan limit reached (3 transfers). Please upgrade to Pro.';
+            setUpgradePrompt(msg);
+            toast.warning(msg, { duration: 6000 });
+        };
+
+        TransferService.onUpgradeRequired = (message) => {
+            const msg = message?.message || 'Free plan limit reached (3 transfers). Please upgrade to Pro.';
+            setUpgradePrompt(msg);
+            toast.warning(msg, { duration: 6000 });
         };
 
         discoveryService.addListener(handleLanUpdate);
@@ -249,6 +268,43 @@ export default function BentoOrbit() {
                 devices={nearbyDevices}
                 onSelect={handleDeviceSelect}
             />
+
+            {/* Upgrade banners */}
+            {!isPro && (
+                <div className="mb-4 rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-4 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <Zap className="h-5 w-5 text-amber-600" />
+                        <div>
+                            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                                Free plan: 3 transfers limit
+                            </p>
+                            <p className="text-xs text-amber-700 dark:text-amber-300">
+                                Upgrade to Pro for unlimited transfers.
+                            </p>
+                        </div>
+                    </div>
+                    <a
+                        href="/pricing"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 transition-colors"
+                    >
+                        Upgrade to Pro
+                    </a>
+                </div>
+            )}
+
+            {upgradePrompt && (
+                <div className="mb-4 rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 p-4 flex items-center justify-between gap-4">
+                    <div className="text-sm text-red-700 dark:text-red-200">
+                        {upgradePrompt}
+                    </div>
+                    <a
+                        href="/pricing"
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors"
+                    >
+                        Upgrade
+                    </a>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-7xl mx-auto w-full flex-1">
 

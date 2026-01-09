@@ -8,6 +8,11 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
+import com.anydrop.backend.repository.UserRepository;
+import com.anydrop.backend.repository.HistoryRepository;
+import com.anydrop.backend.model.User;
+import org.springframework.messaging.handler.annotation.SendToUser;
+import java.util.Map;
 
 import java.security.Principal;
 
@@ -17,9 +22,14 @@ public class TransferController {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(TransferController.class);
 
     private final SimpMessagingTemplate messagingTemplate;
+    private final UserRepository userRepository;
+    private final HistoryRepository historyRepository;
 
-    public TransferController(SimpMessagingTemplate messagingTemplate) {
+    public TransferController(SimpMessagingTemplate messagingTemplate, UserRepository userRepository,
+            HistoryRepository historyRepository) {
         this.messagingTemplate = messagingTemplate;
+        this.userRepository = userRepository;
+        this.historyRepository = historyRepository;
     }
 
     @MessageMapping("/transfer.request")
@@ -29,6 +39,23 @@ public class TransferController {
 
         log.info("Transfer request from {} to {}: {}", principal.getName(), request.getTargetDeviceId(),
                 request.getFilename());
+
+        User sender = userRepository.findByEmail(principal.getName())
+                .orElse(null);
+
+        if (sender != null) {
+            String planName = sender.getPlan() != null ? sender.getPlan().getName() : "SCOUT";
+            if (!"TITAN".equalsIgnoreCase(planName) && !"PRO".equalsIgnoreCase(planName)) {
+                long transferCount = historyRepository.countByUser(sender);
+                if (transferCount >= 3) {
+                    log.info("🚫 Transfer blocked due to plan limit for user {}", sender.getEmail());
+                    messagingTemplate.convertAndSendToUser(principal.getName(), "/queue/transfer.status",
+                            Map.of("type", "UPGRADE_REQUIRED", "message",
+                                    "Free plan limit reached (3 transfers). Please upgrade to Pro."));
+                    return;
+                }
+            }
+        }
 
         // Enrich authentication info (Sender Name)
         request.setSender(principal.getName());

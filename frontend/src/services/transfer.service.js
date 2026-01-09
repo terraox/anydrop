@@ -13,6 +13,7 @@ class TransferService {
         this.onProgress = null;
         this.onError = null;
         this.onTransferComplete = null; // Callback for completed transfers
+        this.onUpgradeRequired = null; // Callback when backend signals upgrade requirement
         this.pendingFiles = new Map(); // transferId -> { file, transferId, targetDeviceId }
         this.receivingTransfers = new Map(); // transferId -> { chunks: [], fileName: string, totalSize: number }
         this.queue = [];
@@ -126,6 +127,15 @@ class TransferService {
                     console.error('❌ Server error:', message.message);
                     if (this.onError) this.onError(message.message);
                     // If error occurs, we might need to clear current processing item
+                    if (this.isProcessing && this.queue.length > 0) {
+                        this.finishTransfer(this.queue[0].transferId);
+                    }
+                    break;
+
+                case 'UPGRADE_REQUIRED':
+                    console.warn('🚫 Upgrade required message:', message.message);
+                    if (this.onUpgradeRequired) this.onUpgradeRequired(message);
+                    // Clear current pending file so queue doesn’t hang
                     if (this.isProcessing && this.queue.length > 0) {
                         this.finishTransfer(this.queue[0].transferId);
                     }

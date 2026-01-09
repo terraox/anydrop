@@ -16,6 +16,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
@@ -100,6 +102,9 @@ public class AuthController {
                             request.getEmail().trim(),
                             request.getPassword()));
             log.info("✅ Authentication successful for: {}", request.getEmail());
+        } catch (DisabledException | LockedException e) {
+            log.warn("🚫 Banned/locked account login attempt for {}: {}", request.getEmail(), e.getMessage());
+            return ResponseEntity.status(403).body("Your account is banned. Please contact the administrator.");
         } catch (org.springframework.security.authentication.BadCredentialsException e) {
             log.error("❌ Invalid credentials for {}: {}", request.getEmail(), e.getMessage());
             return ResponseEntity.status(401).body("Invalid email or password");
