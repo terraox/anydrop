@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -7,6 +8,7 @@ import '../../core/theme/colors.dart';
 import '../../models/device.dart';
 import '../../providers/device_provider.dart';
 import '../../services/file_service.dart';
+import '../../services/transfer_service.dart';
 import '../../widgets/device_card.dart';
 import '../../widgets/glassmorphic_container.dart';
 
@@ -35,13 +37,13 @@ class _SendHubState extends State<SendHub> {
       case 'file':
         final files = await _fileService.pickFiles();
         if (files != null && files.isNotEmpty) {
-          _showFilesSelected(files.length);
+          _handleFilesSelected(files);
         }
         break;
       case 'media':
         final files = await _fileService.pickMedia();
         if (files != null && files.isNotEmpty) {
-          _showFilesSelected(files.length);
+          _handleFilesSelected(files);
         }
         break;
       case 'paste':
@@ -51,6 +53,60 @@ class _SendHubState extends State<SendHub> {
         _showTextInput();
         break;
     }
+  }
+
+  void _handleFilesSelected(List<dynamic> files) {
+    if (_selectedDevice == null) {
+      // No device selected - show message to select one first
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${files.length} file(s) selected. Now select a device to send to.'),
+          backgroundColor: AppColors.violet500,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      // Store files for later sending
+      setState(() {
+        _pendingFiles = files;
+      });
+    } else {
+      // Device already selected - send immediately
+      _sendFilesToDevice(files, _selectedDevice!);
+    }
+  }
+
+  List<dynamic>? _pendingFiles;
+
+  void _sendFilesToDevice(List<dynamic> files, Device device) async {
+    final transferService = context.read<TransferService>();
+    
+    for (final file in files) {
+      if (file.path != null) {
+        final transferId = DateTime.now().millisecondsSinceEpoch.toString();
+        
+        // Use the transfer service for P2P
+        await transferService.sendFile(
+          device.id,
+          File(file.path!),
+          transferId,
+        );
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sending ${file.name} to ${device.name}...'),
+            backgroundColor: AppColors.violet500,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
+    
+    // Clear pending files
+    setState(() {
+      _pendingFiles = null;
+    });
   }
 
   void _showFilesSelected(int count) {
@@ -99,7 +155,20 @@ class _SendHubState extends State<SendHub> {
   @override
   Widget build(BuildContext context) {
     final deviceProvider = context.watch<DeviceProvider>();
+    final transferService = context.watch<TransferService>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // Check if transfer completed and clear selected device
+    if (!transferService.isSending && _selectedDevice != null && transferService.progress >= 1.0) {
+      // Transfer completed - clear selection after a brief delay
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          setState(() {
+            _selectedDevice = null;
+          });
+        }
+      });
+    }
 
     return Scaffold(
       body: SafeArea(
@@ -260,6 +329,10 @@ class _SendHubState extends State<SendHub> {
                               setState(() {
                                 _selectedDevice = device;
                               });
+                              // If there are pending files, send them now
+                              if (_pendingFiles != null && _pendingFiles!.isNotEmpty) {
+                                _sendFilesToDevice(_pendingFiles!, device);
+                              }
                             },
                           );
                         },

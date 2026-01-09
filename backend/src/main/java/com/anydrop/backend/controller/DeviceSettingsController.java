@@ -18,46 +18,54 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DeviceSettingsController {
 
-    private final ServerSettingsRepository settingsRepository;
-    private final DiscoveryService discoveryService;
+        private final ServerSettingsRepository settingsRepository;
+        private final DiscoveryService discoveryService;
 
-    @PutMapping("/name")
-    public ResponseEntity<Map<String, String>> updateDeviceName(@RequestBody Map<String, String> request) {
-        String newDeviceName = request.get("deviceName");
-        String newDeviceIcon = request.getOrDefault("deviceIcon", "laptop");
+        @PutMapping("/name")
+        public ResponseEntity<Map<String, String>> updateDeviceName(@RequestBody Map<String, String> request) {
+                String newDeviceName = request.get("deviceName");
+                String newDeviceIcon = request.getOrDefault("deviceIcon", "laptop");
 
-        // Save to database as server-level settings
-        ServerSettings nameSetting = settingsRepository.findBySettingKey("device_name")
-                .orElse(ServerSettings.builder().settingKey("device_name").build());
-        nameSetting.setSettingValue(newDeviceName);
-        settingsRepository.save(nameSetting);
+                // Save to database as server-level settings
+                ServerSettings nameSetting = settingsRepository.findBySettingKey("device_name")
+                                .orElse(null);
+                if (nameSetting == null) {
+                        nameSetting = new ServerSettings();
+                        nameSetting.setSettingKey("device_name");
+                }
+                nameSetting.setSettingValue(newDeviceName);
+                settingsRepository.save(nameSetting);
 
-        ServerSettings iconSetting = settingsRepository.findBySettingKey("device_icon")
-                .orElse(ServerSettings.builder().settingKey("device_icon").build());
-        iconSetting.setSettingValue(newDeviceIcon);
-        settingsRepository.save(iconSetting);
+                ServerSettings iconSetting = settingsRepository.findBySettingKey("device_icon")
+                                .orElse(null);
+                if (iconSetting == null) {
+                        iconSetting = new ServerSettings();
+                        iconSetting.setSettingKey("device_icon");
+                }
+                iconSetting.setSettingValue(newDeviceIcon);
+                settingsRepository.save(iconSetting);
 
-        // Update mDNS broadcast with new name
-        discoveryService.updateDeviceIdentity(newDeviceName, newDeviceIcon);
+                // Update mDNS broadcast with new name
+                discoveryService.updateDeviceIdentity(newDeviceName, newDeviceIcon);
 
-        Map<String, String> response = new HashMap<>();
-        response.put("message", "Device name updated successfully");
-        response.put("deviceName", newDeviceName);
-        return ResponseEntity.ok(response);
-    }
+                Map<String, String> response = new HashMap<>();
+                response.put("message", "Device name updated successfully");
+                response.put("deviceName", newDeviceName);
+                return ResponseEntity.ok(response);
+        }
 
-    @GetMapping("/identity")
-    public ResponseEntity<Map<String, String>> getDeviceIdentity() {
-        String deviceName = settingsRepository.findBySettingKey("device_name")
-                .map(ServerSettings::getSettingValue)
-                .orElse("AnyDrop-Server");
-        String deviceIcon = settingsRepository.findBySettingKey("device_icon")
-                .map(ServerSettings::getSettingValue)
-                .orElse("laptop");
+        @GetMapping("/identity")
+        public ResponseEntity<Map<String, String>> getDeviceIdentity() {
+                String deviceName = settingsRepository.findBySettingKey("device_name")
+                                .map(ServerSettings::getSettingValue)
+                                .orElse("AnyDrop-Server");
+                String deviceIcon = settingsRepository.findBySettingKey("device_icon")
+                                .map(ServerSettings::getSettingValue)
+                                .orElse("laptop");
 
-        Map<String, String> identity = new HashMap<>();
-        identity.put("deviceName", deviceName);
-        identity.put("deviceIcon", deviceIcon);
-        return ResponseEntity.ok(identity);
-    }
+                Map<String, String> identity = new HashMap<>();
+                identity.put("deviceName", deviceName);
+                identity.put("deviceIcon", deviceIcon);
+                return ResponseEntity.ok(identity);
+        }
 }

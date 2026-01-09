@@ -10,11 +10,15 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 
 @Component
-@RequiredArgsConstructor
-@Slf4j
 public class CleanupTask {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CleanupTask.class);
+
     private final HistoryRepository historyRepository;
+
+    public CleanupTask(HistoryRepository historyRepository) {
+        this.historyRepository = historyRepository;
+    }
 
     @Scheduled(fixedRate = 3600000) // Every hour
     @Transactional

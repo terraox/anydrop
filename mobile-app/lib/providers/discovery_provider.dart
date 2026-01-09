@@ -26,7 +26,7 @@ class DiscoveredDevice {
 }
 
 /// Hybrid Discovery Provider
-/// Uses mDNS first, then falls back to subnet scanning if no devices found
+/// Uses mDNS and subnet scanning in parallel for maximum device discovery
 class DiscoveryProvider extends ChangeNotifier {
   final List<DiscoveredDevice> _devices = [];
   final SubnetScannerService _subnetScanner = SubnetScannerService();
@@ -60,7 +60,7 @@ class DiscoveryProvider extends ChangeNotifier {
   }
 
   /// Start discovering AnyDrop services
-  /// First tries mDNS, then falls back to subnet scanning
+  /// Runs mDNS and subnet scanning in parallel for maximum device discovery
   Future<void> startScanning() async {
     if (_isScanning) return;
 
@@ -69,25 +69,23 @@ class DiscoveryProvider extends ChangeNotifier {
     _devices.clear();
     notifyListeners();
 
-    // Try mDNS first
+    // Start mDNS discovery
     try {
       _discovery = await nsd.startDiscovery(serviceType);
       _discovery!.addServiceListener((service, status) {
         _handleMdnsUpdate(service, status);
       });
       debugPrint('📡 mDNS Discovery started for $serviceType');
-
-      // Set fallback timer - if no mDNS devices found, start subnet scan
-      _fallbackTimer = Timer(mdnsFallbackTimeout, () {
-        if (_devices.isEmpty) {
-          debugPrint('⚠️ No mDNS devices found, starting subnet scan...');
-          _startSubnetScan();
-        }
-      });
     } catch (e) {
-      debugPrint('❌ mDNS failed: $e, starting subnet scan...');
-      _startSubnetScan();
+      debugPrint('❌ mDNS failed: $e, continuing with subnet scan...');
     }
+
+    // Always start subnet scan in parallel after a short delay
+    // This ensures we find devices even if mDNS isn't working or is slow
+    _fallbackTimer = Timer(const Duration(seconds: 2), () {
+      debugPrint('🔍 Starting subnet scan in parallel with mDNS...');
+      _startSubnetScan();
+    });
   }
 
   void _handleMdnsUpdate(nsd.Service service, nsd.ServiceStatus status) {

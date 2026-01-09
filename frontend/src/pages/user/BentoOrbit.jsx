@@ -11,36 +11,33 @@ import FileUpload from '../../components/ui/FileUpload';
 import { fireSideCannons } from '../../components/magicui/Confetti';
 import { useSoundEffects } from '../../hooks/useSoundEffects';
 import DeviceSelectionModal from './DeviceSelectionModal';
+import { useDeviceName } from '../../context/DeviceNameContext';
 import api from '../../services/api';
 
 export default function BentoOrbit() {
     const [files, setFiles] = useState([]);
     const { playUploadStart, playUploadSuccess, playUploadError } = useSoundEffects();
 
-    // Device Name Logic
-    const generateDeviceName = () => {
-        const prefixes = ['Orbit', 'Nexus', 'Flux', 'Cyber', 'Titan', 'Aero', 'Prime'];
-        const suffixes = ['Alpha', 'Beta', 'Prime', 'X', '9', 'V2', 'Link'];
-        return `${prefixes[Math.floor(Math.random() * prefixes.length)]}-${suffixes[Math.floor(Math.random() * suffixes.length)]}-${Math.floor(Math.random() * 100)}`;
-    };
-
-    const [deviceName, setDeviceName] = useState(() => localStorage.getItem('anydrop_device_name') || generateDeviceName());
+    // Device Name Logic - Using centralized context
+    const { deviceName, updateDeviceName } = useDeviceName();
+    const [localDeviceName, setLocalDeviceName] = useState(deviceName);
     const [isEditingName, setIsEditingName] = useState(false);
+
+    // Sync local state when device name changes from context
+    React.useEffect(() => {
+        setLocalDeviceName(deviceName);
+    }, [deviceName]);
 
     const handleNameSave = async () => {
         setIsEditingName(false);
-        localStorage.setItem('anydrop_device_name', deviceName);
-
-        // Also save to backend server-level settings
         try {
-            const axios = (await import('axios')).default;
-            await api.put('/device/name', {
-                deviceName: deviceName
-            });
-            toast.success('Device name updated on all devices!');
+            await updateDeviceName(localDeviceName);
+            toast.success('Device name updated! It will sync across all pages.');
         } catch (error) {
-            console.error('Failed to update server device name:', error);
-            toast.error('Saved locally, but failed to update server name');
+            console.error('Failed to update device name:', error);
+            toast.error(error.message || 'Failed to update device name');
+            // Revert on error
+            setLocalDeviceName(deviceName);
         }
     };
 
@@ -51,29 +48,12 @@ export default function BentoOrbit() {
     React.useEffect(() => {
         document.title = "AnyDrop";
 
-        // Connect WebSocket
-        WebSocketService.connect(() => {
-            // Register this device
-            WebSocketService.registerDevice({ name: deviceName });
-
-            // Subscribe to Transfers
-            WebSocketService.subscribe('/user/queue/transfers', (request) => {
-                setIncomingTransfer(request);
-            });
-
-            // Subscribe to WS devices
-            WebSocketService.subscribe('/user/queue/devices', (deviceList) => {
-                setWsDevices(deviceList);
-            });
-        });
+        // Connect TransferService with device name from context
+        if (deviceName) {
+            TransferService.connect(deviceName);
+        }
 
         // Subscribe to LAN devices
-        const handleLanUpdate = (devices) => {
-            setLanDevices(devices);
-        };
-
-        const name = localStorage.getItem('anydrop_device_name') || generateDeviceName();
-        TransferService.connect(name);
 
         TransferService.onProgress = (transferId, progress) => {
             setFiles(prev => prev.map(f =>
@@ -88,11 +68,29 @@ export default function BentoOrbit() {
             ));
         };
 
+        // Handle incoming transfers from other devices (phone -> laptop)
+        TransferService.onTransferRequest = (request) => {
+            console.log('📥 Incoming file request from phone:', request);
+            // Show popup instead of auto-accepting
+            setIncomingTransfer({
+                transferId: request.transferId,
+                fileName: request.fileName,
+                size: request.size,
+                senderId: request.senderId,
+                sender: request.sender || request.senderId || 'Unknown Device',
+                fileType: request.mimeType || 'application/octet-stream'
+            });
+        };
+
+        // Handle completed transfers
+        TransferService.onTransferComplete = (transferId, fileName) => {
+            toast.success(`File received: ${fileName}`);
+        };
+
         discoveryService.addListener(handleLanUpdate);
         discoveryService.scanNetwork();
 
         return () => {
-            WebSocketService.disconnect();
             TransferService.disconnect();
             discoveryService.removeListener(handleLanUpdate);
         };
@@ -131,22 +129,52 @@ export default function BentoOrbit() {
         return unique;
     }, [wsDevices, lanDevices, deviceName]);
 
-    const handleAcceptTransfer = () => {
-        if (incomingTransfer?.downloadUrl) {
-            const link = document.createElement('a');
-            link.href = incomingTransfer.downloadUrl;
-            link.download = incomingTransfer.filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            toast.success(`Downloading ${incomingTransfer.filename}...`);
+    const handleAcceptTransfer = async () => {
+        if (!incomingTransfer) return;
+        
+        try {
+            // Use File System Access API to let user choose save location
+            let fileHandle = null;
+            let savePath = null;
+            
+            if ('showSaveFilePicker' in window) {
+                try {
+                    fileHandle = await window.showSaveFilePicker({
+                        suggestedName: incomingTransfer.fileName,
+                        types: [{
+                            description: 'File',
+                            accept: {
+                                [incomingTransfer.fileType || 'application/octet-stream']: [incomingTransfer.fileName.split('.').pop() || '']
+                            }
+                        }]
+                    });
+                    savePath = fileHandle.name;
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.error('Error showing save dialog:', err);
+                        toast.error('Failed to open save dialog');
+                    }
+                    // Fall back to default download if user cancels or API not available
+                }
+            }
+            
+            // Accept the transfer with file handle if available
+            TransferService.acceptTransfer(incomingTransfer.transferId, incomingTransfer.senderId, fileHandle);
+            
+            toast.success(`Accepting transfer: ${incomingTransfer.fileName}...`);
+            setIncomingTransfer(null);
+        } catch (error) {
+            console.error('Error accepting transfer:', error);
+            toast.error('Failed to accept transfer');
         }
-        setIncomingTransfer(null);
     };
 
     const handleRejectTransfer = () => {
+        if (incomingTransfer) {
+            TransferService.rejectTransfer(incomingTransfer.transferId, incomingTransfer.senderId);
+            toast.info("Transfer rejected");
+        }
         setIncomingTransfer(null);
-        toast.info("Transfer rejected");
     };
 
 
@@ -253,8 +281,8 @@ export default function BentoOrbit() {
                             {isEditingName ? (
                                 <input
                                     autoFocus
-                                    value={deviceName}
-                                    onChange={(e) => setDeviceName(e.target.value)}
+                                    value={localDeviceName}
+                                    onChange={(e) => setLocalDeviceName(e.target.value)}
                                     onBlur={handleNameSave}
                                     onKeyDown={handleKeyDown}
                                     className="text-2xl font-mono font-bold bg-transparent border-b-2 border-emerald-500 outline-none text-zinc-900 dark:text-white w-full"
@@ -432,12 +460,12 @@ export default function BentoOrbit() {
                                 </div>
                                 <div>
                                     <h3 className="font-bold text-zinc-900 dark:text-white">Incoming File</h3>
-                                    <p className="text-xs text-zinc-500">from {incomingTransfer.sender || 'Unknown Device'}</p>
+                                    <p className="text-xs text-zinc-500">from {incomingTransfer.sender || incomingTransfer.senderId || 'Unknown Device'}</p>
                                 </div>
                             </div>
 
                             <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700/50">
-                                <p className="text-sm font-semibold truncate text-zinc-800 dark:text-zinc-200">{incomingTransfer.filename}</p>
+                                <p className="text-sm font-semibold truncate text-zinc-800 dark:text-zinc-200">{incomingTransfer.fileName}</p>
                                 <p className="text-xs text-zinc-500 mt-1">
                                     {(incomingTransfer.size / 1024 / 1024).toFixed(2)} MB • {incomingTransfer.fileType?.split('/')[1] || 'File'}
                                 </p>

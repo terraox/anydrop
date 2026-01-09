@@ -6,13 +6,44 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
 @Entity
 @Table(name = "plans")
 public class Plan {
+
+    public Plan() {
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public long getSpeedLimit() {
+        return speedLimit;
+    }
+
+    public void setSpeedLimit(long speedLimit) {
+        this.speedLimit = speedLimit;
+    }
+
+    public long getFileSizeLimit() {
+        return fileSizeLimit;
+    }
+
+    public void setFileSizeLimit(long fileSizeLimit) {
+        this.fileSizeLimit = fileSizeLimit;
+    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

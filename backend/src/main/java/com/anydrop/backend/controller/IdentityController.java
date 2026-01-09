@@ -39,6 +39,12 @@ public class IdentityController {
         identity.put("type", "DESKTOP");
         identity.put("app", "AnyDrop");
         identity.put("version", "1.0.0");
+
+        // Include ID for transfer routing - use device name as the identifier
+        // This matches how the web frontend registers with the transfer WebSocket
+        identity.put("id", deviceName);
+        identity.put("deviceId", deviceName);
+
         return ResponseEntity.ok(identity);
     }
 }

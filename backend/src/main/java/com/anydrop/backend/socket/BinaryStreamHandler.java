@@ -14,9 +14,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
-@Slf4j
-@RequiredArgsConstructor
 public class BinaryStreamHandler extends AbstractWebSocketHandler {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(BinaryStreamHandler.class);
 
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, String> sessionTransferMap = new ConcurrentHashMap<>(); // SessionID -> TransferID
@@ -24,6 +24,10 @@ public class BinaryStreamHandler extends AbstractWebSocketHandler {
     private final Map<String, WebSocketSession> receivers = new ConcurrentHashMap<>(); // TransferID -> Session
 
     private final ThrottlingService throttlingService;
+
+    public BinaryStreamHandler(ThrottlingService throttlingService) {
+        this.throttlingService = throttlingService;
+    }
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {

@@ -8,7 +8,11 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:open_file_plus/open_file_plus.dart';
+import 'package:image_gallery_saver/image_gallery_saver.dart';
 import '../core/constants/api_constants.dart';
+import '../utils/file_utils.dart';
 
 /// Unified Transfer Service for Handshake + Binary Streaming
 class TransferService extends ChangeNotifier {
@@ -33,8 +37,21 @@ class TransferService extends ChangeNotifier {
   // Pending transfer request for UI
   Map<String, dynamic>? _pendingRequest;
   
+  // Save location preference
+  String? _customSavePath;
+  bool _saveToGallery = true; // Default: save images/videos to gallery
+  
   // Constants
   static const int CHUNK_SIZE = 64 * 1024; // 64KB chunks
+  
+  // Setters for save preferences
+  void setSaveLocation(String? path) {
+    _customSavePath = path;
+  }
+  
+  void setSaveToGallery(bool value) {
+    _saveToGallery = value;
+  }
   
   // Getters
   bool get isConnected => _isConnected;
@@ -191,12 +208,30 @@ class TransferService extends ChangeNotifier {
     }
   }
   
+  /// Choose save location for incoming file
+  Future<String?> chooseSaveLocation(String fileName) async {
+    try {
+      // Use file_picker to let user choose directory
+      String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+      return selectedDirectory;
+    } catch (e) {
+      debugPrint('❌ Error choosing save location: $e');
+      return null;
+    }
+  }
+  
   /// Accept an incoming transfer request
-  Future<void> acceptTransfer() async {
+  /// [savePath] - Optional custom save path. If null, uses default location based on file type
+  Future<void> acceptTransfer({String? savePath}) async {
     if (_pendingRequest == null) return;
     
     final request = _pendingRequest!;
     _pendingRequest = null;
+    
+    // Use provided save path or custom path if set
+    if (savePath != null) {
+      _customSavePath = savePath;
+    }
     
     // Request storage permission - handle Android 13+ differently
     bool hasPermission = false;
@@ -238,22 +273,46 @@ class TransferService extends ChangeNotifier {
     _progress = 0.0;
     _isReceiving = true;
     
-    // Get download directory
+    // Sanitize filename
+    final fileName = FileUtils.sanitizeFileName(request['fileName'] as String);
+    final isMediaFile = FileUtils.isMedia(fileName);
+    
+    // Get appropriate save directory
     Directory? directory;
-    if (Platform.isAndroid) {
-      directory = Directory('/storage/emulated/0/Download');
+    
+    // Use custom path if set, otherwise use appropriate directory based on file type
+    if (_customSavePath != null) {
+      directory = Directory(_customSavePath!);
+    } else if (Platform.isAndroid) {
+      // For Android, use appropriate directory based on file type
+      if (isMediaFile && _saveToGallery) {
+        // Save to gallery-accessible location
+        if (FileUtils.isImage(fileName)) {
+          directory = Directory('/storage/emulated/0/Pictures/AnyDrop');
+        } else if (FileUtils.isVideo(fileName)) {
+          directory = Directory('/storage/emulated/0/Movies/AnyDrop');
+        } else if (FileUtils.isAudio(fileName)) {
+          directory = Directory('/storage/emulated/0/Music/AnyDrop');
+        } else {
+          directory = Directory('/storage/emulated/0/Download/AnyDrop');
+        }
+      } else {
+        directory = Directory('/storage/emulated/0/Download/AnyDrop');
+      }
     } else {
+      // iOS - use documents directory
       directory = await getApplicationDocumentsDirectory();
     }
     
+    // Ensure directory exists
     if (!directory.existsSync()) {
-      directory = await getExternalStorageDirectory();
+      await directory.create(recursive: true);
     }
     
-    _receivingFile = File('${directory!.path}/${request['fileName']}');
+    _receivingFile = File('${directory.path}/$fileName');
     _fileSink = _receivingFile!.openWrite();
     
-    debugPrint('📂 Saving to: ${_receivingFile!.path} (Expected size: ${(_totalBytes / 1024 / 1024).toStringAsFixed(2)}MB)');
+    debugPrint('📂 Saving to: ${_receivingFile!.path} (Expected size: ${(_totalBytes / 1024 / 1024).toStringAsFixed(2)}MB, Type: ${FileUtils.getMimeType(fileName)})');
     
     // Send acceptance response
     _send({
@@ -291,11 +350,42 @@ class TransferService extends ChangeNotifier {
       
       if (_receivingFile != null && _receivingFile!.existsSync()) {
         final actualSize = await _receivingFile!.length();
+        final fileName = _receivingFile!.path.split('/').last;
         debugPrint('✅ File saved: ${_receivingFile!.path} (${(actualSize / 1024 / 1024).toStringAsFixed(2)}MB)');
         
         if (_totalBytes > 0 && actualSize != _totalBytes) {
           debugPrint('⚠️ Size mismatch: Expected ${_totalBytes} bytes, got $actualSize bytes');
         }
+        
+        // For Android: Add to MediaStore if it's an image or video and saveToGallery is enabled
+        if (Platform.isAndroid && _saveToGallery) {
+          if (FileUtils.isImage(fileName) || FileUtils.isVideo(fileName)) {
+            try {
+              final bytes = await _receivingFile!.readAsBytes();
+              final result = await ImageGallerySaver.saveImage(
+                bytes,
+                name: fileName,
+                isReturnImagePathOfIOS: false,
+              );
+              
+              if (result['isSuccess'] == true) {
+                debugPrint('✅ File added to gallery: ${result['filePath']}');
+              } else {
+                debugPrint('⚠️ Failed to add file to gallery, but file is saved');
+              }
+            } catch (e) {
+              debugPrint('⚠️ Error adding to gallery: $e (file is still saved)');
+            }
+          }
+        }
+        
+        // Try to open the file (optional - can be disabled)
+        // Uncomment if you want files to auto-open after transfer
+        // try {
+        //   await OpenFile.open(_receivingFile!.path);
+        // } catch (e) {
+        //   debugPrint('Could not open file: $e');
+        // }
       }
     } catch (e) {
       debugPrint('❌ Error finalizing file: $e');
@@ -316,6 +406,7 @@ class TransferService extends ChangeNotifier {
       _totalBytes = 0;
       _receivedBytes = 0;
       _currentTransferId = null;
+      _customSavePath = null; // Reset custom path after transfer
       notifyListeners();
     }
   }
@@ -355,20 +446,23 @@ class TransferService extends ChangeNotifier {
     notifyListeners();
     
     final fileSize = await file.length();
+    final fileName = file.path.split('/').last;
+    final mimeType = FileUtils.getMimeType(fileName);
     
-    // Send transfer request
+    // Send transfer request with MIME type
     _send({
       'type': 'TRANSFER_REQUEST',
       'targetId': targetId,
       'senderId': _deviceId,
       'transferId': transferId,
-      'fileName': file.path.split('/').last,
+      'fileName': fileName,
       'size': fileSize,
+      'mimeType': mimeType, // Include MIME type for proper handling
     });
     
     // Wait for ACCEPTED response before sending binary
     // The response will automatically trigger startBinaryUpload via _handleTransferResponse
-    debugPrint('📤 Sent transfer request to $targetId for file ${file.path.split('/').last} (${(fileSize / 1024 / 1024).toStringAsFixed(2)}MB)');
+    debugPrint('📤 Sent transfer request to $targetId for file $fileName (${(fileSize / 1024 / 1024).toStringAsFixed(2)}MB, $mimeType)');
   }
   
   /// Start binary upload (called after receiving ACCEPTED)

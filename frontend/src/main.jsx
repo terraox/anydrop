@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { ThemeProvider } from 'next-themes'
 import { AuthProvider } from './context/AuthContext'
+import { DeviceNameProvider } from './context/DeviceNameContext'
 import App from './App.jsx'
 import './styles/index.css'
 
@@ -14,9 +15,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <ErrorBoundary>
             <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
                 <AuthProvider>
-                    <BrowserRouter>
-                        <App />
-                    </BrowserRouter>
+                    <DeviceNameProvider>
+                        <BrowserRouter>
+                            <App />
+                        </BrowserRouter>
+                    </DeviceNameProvider>
                 </AuthProvider>
             </ThemeProvider>
         </ErrorBoundary>

@@ -131,9 +131,15 @@ class SubnetScannerService {
       // Port is open, now verify it's an AnyDrop server
       final identity = await _identifyDevice(ip, port);
       if (identity != null) {
+        // Use the ID from the response if available, otherwise use device NAME
+        // This matches how the web frontend registers with the transfer WebSocket
+        // The web frontend uses device name as its ID, so we need to use the same
+        final deviceName = identity['name'] ?? 'Unknown Device';
+        final deviceId = identity['id'] ?? identity['deviceId'] ?? deviceName;
+        
         final device = ScannedDevice(
-          id: '$ip:$port',
-          name: identity['name'] ?? 'Unknown Device',
+          id: deviceId,
+          name: deviceName,
           icon: identity['icon'] ?? 'monitor',
           ip: ip,
           port: port,
@@ -141,7 +147,7 @@ class SubnetScannerService {
         );
         _devices.add(device);
         _devicesController.add(_devices);
-        debugPrint('✅ Found AnyDrop device: ${device.name} @ $ip:$port');
+        debugPrint('✅ Found AnyDrop device: ${device.name} @ $ip:$port (ID: $deviceId)');
       }
     } on SocketException {
       // Port closed or host unreachable - ignore
@@ -176,9 +182,13 @@ class SubnetScannerService {
     debugPrint('🔍 Manually probing $ip:$port...');
     final identity = await _identifyDevice(ip, port);
     if (identity != null) {
+      // Use the ID from the response if available, otherwise use device name
+      final deviceName = identity['name'] ?? 'Unknown Device';
+      final deviceId = identity['id'] ?? identity['deviceId'] ?? deviceName;
+      
       final device = ScannedDevice(
-        id: '$ip:$port',
-        name: identity['name'] ?? 'Unknown Device',
+        id: deviceId,
+        name: deviceName,
         icon: identity['icon'] ?? 'monitor',
         ip: ip,
         port: port,
@@ -189,7 +199,7 @@ class SubnetScannerService {
       _devices.removeWhere((d) => d.id == device.id);
       _devices.add(device);
       _devicesController.add(_devices);
-      debugPrint('✅ Manually added: ${device.name} @ $ip:$port');
+      debugPrint('✅ Manually added: ${device.name} @ $ip:$port (ID: $deviceId)');
       return device;
     }
     debugPrint('❌ No AnyDrop server found at $ip:$port');

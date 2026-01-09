@@ -16,11 +16,15 @@ import java.security.Principal;
 import java.util.Map;
 
 @Controller
-@RequiredArgsConstructor
-@Slf4j
 public class DeviceController {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DeviceController.class);
+
     private final DeviceRegistryService deviceRegistryService;
+
+    public DeviceController(DeviceRegistryService deviceRegistryService) {
+        this.deviceRegistryService = deviceRegistryService;
+    }
 
     @MessageMapping("/device.register")
     public void registerDevice(@Payload DeviceInfo device, SimpMessageHeaderAccessor headerAccessor,

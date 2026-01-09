@@ -15,8 +15,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.time.Duration;
 
-@Slf4j
 public class ThrottlingFilter extends OncePerRequestFilter {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ThrottlingFilter.class);
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)

@@ -8,6 +8,7 @@ import TransferService from '../../services/transfer.service';
 import WebSocketService from '../../services/websocket.service';
 import discoveryService from '../../services/discovery.service';
 import DeviceSelectionModal from './DeviceSelectionModal';
+import { useDeviceName } from '../../context/DeviceNameContext';
 import api from '../../services/api';
 
 export default function ClassicOrbit() {
@@ -15,30 +16,26 @@ export default function ClassicOrbit() {
     const [files, setFiles] = useState([]);
     const fileInputRef = useRef(null);
 
-    // Device Name Logic
-    const generateDeviceName = () => {
-        const prefixes = ['Orbit', 'Nexus', 'Flux', 'Cyber', 'Titan', 'Aero', 'Prime'];
-        const suffixes = ['Alpha', 'Beta', 'Prime', 'X', '9', 'V2', 'Link'];
-        return `${prefixes[Math.floor(Math.random() * prefixes.length)]}-${suffixes[Math.floor(Math.random() * suffixes.length)]}-${Math.floor(Math.random() * 100)}`;
-    };
-
-    const [deviceName, setDeviceName] = useState(() => localStorage.getItem('anydrop_device_name') || generateDeviceName());
+    // Device Name Logic - Using centralized context
+    const { deviceName, updateDeviceName } = useDeviceName();
+    const [localDeviceName, setLocalDeviceName] = useState(deviceName);
     const [isEditingName, setIsEditingName] = useState(false);
+
+    // Sync local state when device name changes from context
+    React.useEffect(() => {
+        setLocalDeviceName(deviceName);
+    }, [deviceName]);
 
     const handleNameSave = async () => {
         setIsEditingName(false);
-        localStorage.setItem('anydrop_device_name', deviceName);
-
-        // Also save to backend server-level settings
         try {
-            const axios = (await import('axios')).default;
-            await api.put('/device/name', {
-                deviceName: deviceName
-            });
-            toast.success('Device name updated on all devices!');
+            await updateDeviceName(localDeviceName);
+            toast.success('Device name updated! It will sync across all pages.');
         } catch (error) {
-            console.error('Failed to update server device name:', error);
-            toast.error('Saved locally, but failed to update server name');
+            console.error('Failed to update device name:', error);
+            toast.error(error.message || 'Failed to update device name');
+            // Revert on error
+            setLocalDeviceName(deviceName);
         }
     };
 
@@ -49,10 +46,16 @@ export default function ClassicOrbit() {
     React.useEffect(() => {
         document.title = "AnyDrop";
 
+        // Connect TransferService with device name from context
+        if (deviceName) {
+            TransferService.connect(deviceName);
+        }
+
         // Connect WebSocket
         WebSocketService.connect(() => {
-            const name = localStorage.getItem('anydrop_device_name') || generateDeviceName();
-            WebSocketService.registerDevice({ name });
+            if (deviceName) {
+                WebSocketService.registerDevice({ name: deviceName });
+            }
 
             // Subscribe to personal transfers
             WebSocketService.subscribe('/user/queue/transfers', (request) => {
@@ -70,9 +73,9 @@ export default function ClassicOrbit() {
             setLanDevices(devices);
         };
 
-        const name = localStorage.getItem('anydrop_device_name') || generateDeviceName();
         // connect is now safe to call multiple times as it checks readyState
-        TransferService.connect(name);
+        // This call is now handled by fetchIdentity()
+        // TransferService.connect(name);
 
         TransferService.onProgress = (transferId, progress) => {
             setFiles(prev => prev.map(f =>
@@ -86,6 +89,21 @@ export default function ClassicOrbit() {
             setFiles(prev => prev.map(f =>
                 f.status === 'uploading' ? { ...f, status: 'error' } : f
             ));
+        };
+
+        // Handle incoming transfers from other devices (phone -> laptop)
+        TransferService.onTransferRequest = (request) => {
+            console.log('📥 Incoming file request from phone:', request);
+            toast.info(`Incoming file: ${request.fileName} (${(request.size / 1024 / 1024).toFixed(2)} MB)`);
+
+            // Auto-accept transfers for seamless receiving
+            TransferService.acceptTransfer(request.transferId, request.senderId);
+            toast.success(`Accepting transfer from ${request.senderId || 'phone'}...`);
+        };
+
+        // Handle completed transfers
+        TransferService.onTransferComplete = (transferId, fileName) => {
+            toast.success(`File received: ${fileName}`);
         };
 
         discoveryService.addListener(handleLanUpdate);
@@ -357,8 +375,8 @@ export default function ClassicOrbit() {
                         ) : isEditingName ? (
                             <input
                                 autoFocus
-                                value={deviceName}
-                                onChange={(e) => setDeviceName(e.target.value)}
+                                value={localDeviceName}
+                                onChange={(e) => setLocalDeviceName(e.target.value)}
                                 onBlur={handleNameSave}
                                 onKeyDown={handleKeyDown}
                                 className="font-mono text-xs md:text-sm tracking-wider text-zinc-900 dark:text-white bg-transparent outline-none uppercase font-semibold text-center min-w-[150px]"

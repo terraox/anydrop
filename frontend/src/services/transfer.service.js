@@ -93,7 +93,8 @@ class TransferService {
                         receivedBytes: 0,
                         progress: 0,
                         transferId: message.transferId,
-                        senderId: message.senderId
+                        senderId: message.senderId,
+                        fileHandle: null // Will be set when user accepts with save dialog
                     });
                     if (this.onTransferRequest) this.onTransferRequest(message);
                     break;
@@ -169,7 +170,7 @@ class TransferService {
         }
     }
 
-    handleTransferFinish(transferId) {
+    async handleTransferFinish(transferId) {
         const receivingTransfer = this.receivingTransfers.get(transferId);
 
         if (!receivingTransfer) {
@@ -177,25 +178,28 @@ class TransferService {
             return;
         }
 
-        console.log('✅ Transfer complete! Creating download...');
+        console.log('✅ Transfer complete! Saving file...');
 
         try {
             // Create Blob from all collected chunks
             const finalBlob = new Blob(receivingTransfer.chunks);
-            const downloadUrl = URL.createObjectURL(finalBlob);
-
-            // Create download link
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.download = receivingTransfer.fileName || 'AnyDrop_File';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            // Cleanup URL after a delay
-            setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
-
-            console.log(`✅ File downloaded: ${receivingTransfer.fileName} (${(finalBlob.size / 1024 / 1024).toFixed(2)}MB)`);
+            
+            // If file handle was provided (from save dialog), use it
+            if (receivingTransfer.fileHandle) {
+                try {
+                    const writable = await receivingTransfer.fileHandle.createWritable();
+                    await writable.write(finalBlob);
+                    await writable.close();
+                    console.log(`✅ File saved to: ${receivingTransfer.fileHandle.name} (${(finalBlob.size / 1024 / 1024).toFixed(2)}MB)`);
+                } catch (error) {
+                    console.error('❌ Error writing to file handle:', error);
+                    // Fall back to download
+                    this.downloadFile(finalBlob, receivingTransfer.fileName);
+                }
+            } else {
+                // Use default download
+                this.downloadFile(finalBlob, receivingTransfer.fileName);
+            }
 
             // Clear receiving transfer
             this.receivingTransfers.delete(transferId);
@@ -205,12 +209,23 @@ class TransferService {
                 this.onTransferComplete(transferId, receivingTransfer.fileName);
             }
         } catch (error) {
-            console.error('❌ Error creating download:', error);
+            console.error('❌ Error saving file:', error);
             this.receivingTransfers.delete(transferId);
             if (this.onError) {
-                this.onError(`Failed to download ${receivingTransfer.fileName}: ${error.message}`);
+                this.onError(`Failed to save ${receivingTransfer.fileName}: ${error.message}`);
             }
         }
+    }
+    
+    downloadFile(blob, fileName) {
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = fileName || 'AnyDrop_File';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
     }
 
     // New entry point for sending files
@@ -343,8 +358,17 @@ class TransferService {
     }
 
     // Accept an incoming transfer request
-    acceptTransfer(transferId, senderId) {
+    acceptTransfer(transferId, senderId, fileHandle = null) {
         console.log('✅ Accepting transfer:', transferId);
+        
+        // Store file handle if provided
+        if (fileHandle) {
+            const receivingTransfer = this.receivingTransfers.get(transferId);
+            if (receivingTransfer) {
+                receivingTransfer.fileHandle = fileHandle;
+            }
+        }
+        
         this.send({
             type: 'TRANSFER_RESPONSE',
             targetId: senderId,

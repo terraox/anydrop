@@ -170,7 +170,7 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  void _showUnifiedTransferDialog(TransferService service) {
+  void _showUnifiedTransferDialog(TransferService service) async {
     _isDialogShowing = true;
     final request = service.pendingRequest!;
     final fileName = request['fileName'] ?? 'Unknown';
@@ -196,6 +196,11 @@ class _MainScreenState extends State<MainScreen> {
             Text('File: $fileName', style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Text('Size: $sizeMB MB'),
+            const SizedBox(height: 16),
+            const Text(
+              'Choose where to save this file',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
           ],
         ),
         actions: [
@@ -208,12 +213,21 @@ class _MainScreenState extends State<MainScreen> {
             child: const Text('Decline'),
           ),
           ElevatedButton(
-            onPressed: () {
-              service.acceptTransfer();
+            onPressed: () async {
               Navigator.of(ctx).pop();
               _isDialogShowing = false;
+              
+              // Show save location picker
+              final savePath = await service.chooseSaveLocation(fileName);
+              if (savePath != null) {
+                // Accept with custom save path
+                await service.acceptTransfer(savePath: savePath);
+              } else {
+                // User cancelled save location, but still accept with default location
+                await service.acceptTransfer();
+              }
             },
-            child: const Text('Accept'),
+            child: const Text('Accept & Choose Location'),
           ),
         ],
       ),

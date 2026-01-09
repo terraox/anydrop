@@ -13,11 +13,13 @@ import { GridPattern } from '../components/ui/GridPattern';
 import WebSocketService from '../services/websocket.service';
 import TransferService from '../services/transfer.service';
 import { useAuth } from '../context/AuthContext';
+import { useDeviceName } from '../context/DeviceNameContext';
 import { toast } from 'sonner';
 
 export default function DashboardLayout() {
   const location = useLocation();
   const { user } = useAuth();
+  const { deviceName } = useDeviceName();
 
   React.useEffect(() => {
     if (user) {
@@ -33,8 +35,8 @@ export default function DashboardLayout() {
 
       // Connect to STOMP for other features
       WebSocketService.connect(() => {
-        // Register this browser instance
-        WebSocketService.registerDevice({ name: user.username ? `${user.username}'s Browser` : 'Web Client' });
+        // Register this browser instance with the device name from context
+        WebSocketService.registerDevice({ name: deviceName || (user.username ? `${user.username}'s Browser` : 'Web Client') });
 
         // Subscribe to incoming transfers (from mobile to web)
         WebSocketService.subscribe('/user/queue/transfers', (data) => {
@@ -58,7 +60,7 @@ export default function DashboardLayout() {
       WebSocketService.disconnect();
       TransferService.disconnect();
     };
-  }, [user]);
+  }, [user, deviceName]);
   return (
     <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans selection:bg-violet-500/30 relative">
       {/* Global Background Grid */}

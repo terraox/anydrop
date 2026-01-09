@@ -1,5 +1,6 @@
 import { User, Mail, Lock, Shield, LogOut, Monitor, Moon, Sun, Laptop, Camera, Key, RefreshCw, LayoutGrid, Volume2, Smartphone } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useDeviceName } from '../../context/DeviceNameContext';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import ChangePasswordModal from '../../components/user/ChangePasswordModal';
@@ -96,16 +97,14 @@ export default function Settings() {
     const { user, logout, updateProfile, changePassword } = useAuth();
     const { theme, setTheme } = useTheme();
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-    const [deviceName, setDeviceName] = useState('');
-    const [isLoadingDeviceName, setIsLoadingDeviceName] = useState(false);
+    const { deviceName, isLoading: isLoadingDeviceName, updateDeviceName } = useDeviceName();
+    const [localDeviceName, setLocalDeviceName] = useState(deviceName);
     const fileInputRef = useRef(null);
 
+    // Sync local state when device name changes from context
     useEffect(() => {
-        // Load device name using direct axios (not api) to avoid auth
-        api.get('/device/identity')
-            .then(res => setDeviceName(res.data.deviceName))
-            .catch(err => console.error('Failed to load device name:', err));
-    }, []);
+        setLocalDeviceName(deviceName);
+    }, [deviceName]);
 
     const handleAvatarClick = () => {
         fileInputRef.current?.click();
@@ -145,24 +144,17 @@ export default function Settings() {
     };
 
     const handleSaveDeviceName = async () => {
-        if (!deviceName || deviceName.trim() === '') {
+        if (!localDeviceName || localDeviceName.trim() === '') {
             toast.error('Device name cannot be empty');
             return;
         }
 
-        setIsLoadingDeviceName(true);
         try {
-            // Use axios directly (not api) to avoid sending auth token
-            // /api/device/** is a public endpoint
-            const response = await api.put('/device/name', {
-                deviceName: deviceName.trim()
-            });
-            toast.success('Device name updated! Other devices will see the new name.');
+            await updateDeviceName(localDeviceName.trim());
+            toast.success('Device name updated! It will sync across all pages and devices.');
         } catch (error) {
-            toast.error('Failed to update device name');
+            toast.error(error.message || 'Failed to update device name');
             console.error(error);
-        } finally {
-            setIsLoadingDeviceName(false);
         }
     };
 
@@ -261,8 +253,8 @@ export default function Settings() {
                                         <Laptop className="w-4 h-4 text-zinc-400" />
                                         <input
                                             type="text"
-                                            value={deviceName}
-                                            onChange={(e) => setDeviceName(e.target.value)}
+                                            value={localDeviceName}
+                                            onChange={(e) => setLocalDeviceName(e.target.value)}
                                             placeholder={user?.username + "'s Computer"}
                                             className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-white w-full placeholder:text-zinc-500"
                                         />

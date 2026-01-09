@@ -12,11 +12,15 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
-@Slf4j
-@RequiredArgsConstructor
 public class DeviceRegistryService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DeviceRegistryService.class);
+
     private final SimpMessagingTemplate messagingTemplate;
+
+    public DeviceRegistryService(SimpMessagingTemplate messagingTemplate) {
+        this.messagingTemplate = messagingTemplate;
+    }
 
     // UserId -> Set of Devices
     private final Map<String, Set<DeviceInfo>> activeDevices = new ConcurrentHashMap<>();

@@ -1,10 +1,11 @@
 package com.anydrop.backend.socket;
 
+import com.anydrop.backend.model.DeviceInfo;
 import com.anydrop.backend.service.DeviceRegistryService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 import org.springframework.web.socket.handler.AbstractWebSocketHandler;
@@ -14,9 +15,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
-@Slf4j
-@RequiredArgsConstructor
 public class AnyDropHandler extends AbstractWebSocketHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(AnyDropHandler.class);
 
     // DeviceID -> WebSocketSession
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
@@ -25,6 +26,10 @@ public class AnyDropHandler extends AbstractWebSocketHandler {
 
     private final DeviceRegistryService deviceRegistryService;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public AnyDropHandler(DeviceRegistryService deviceRegistryService) {
+        this.deviceRegistryService = deviceRegistryService;
+    }
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -72,14 +77,14 @@ public class AnyDropHandler extends AbstractWebSocketHandler {
         String userId = principal != null ? principal.getName() : "admin@anydrop.com";
         log.info("📋 Registering device in central registry for user: {}", userId);
 
-        deviceRegistryService.registerDevice(userId, com.anydrop.backend.model.DeviceInfo.builder()
-                .id(deviceId)
-                .sessionId(session.getId())
-                .name(name)
-                .type(json.has("type") && !json.get("type").asText().equals("REGISTER") ? json.get("type").asText()
-                        : "PHONE")
-                .batteryLevel(100)
-                .build());
+        DeviceInfo deviceInfo = new DeviceInfo();
+        deviceInfo.setId(deviceId);
+        deviceInfo.setSessionId(session.getId());
+        deviceInfo.setName(name);
+        deviceInfo.setType(json.has("type") && !json.get("type").asText().equals("REGISTER") ? json.get("type").asText()
+                : "PHONE");
+        deviceInfo.setBatteryLevel(100);
+        deviceRegistryService.registerDevice(userId, deviceInfo);
 
         // Send acknowledgment
         try {

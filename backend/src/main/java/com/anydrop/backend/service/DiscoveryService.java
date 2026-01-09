@@ -19,8 +19,9 @@ import java.util.Map;
  * Other devices can discover it using the service type "_anydrop._tcp.local."
  */
 @Service
-@Slf4j
 public class DiscoveryService {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DiscoveryService.class);
 
     private JmDNS jmdns;
     private static final String SERVICE_TYPE = "_anydrop._tcp.local.";

@@ -12,11 +12,15 @@ import org.springframework.stereotype.Controller;
 import java.security.Principal;
 
 @Controller
-@RequiredArgsConstructor
-@Slf4j
 public class TransferController {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(TransferController.class);
+
     private final SimpMessagingTemplate messagingTemplate;
+
+    public TransferController(SimpMessagingTemplate messagingTemplate) {
+        this.messagingTemplate = messagingTemplate;
+    }
 
     @MessageMapping("/transfer.request")
     public void requestTransfer(@Payload TransferRequest request, Principal principal) {
@@ -56,24 +60,102 @@ public class TransferController {
         messagingTemplate.convertAndSendToUser(principal.getName(), "/queue/transfer.status", response);
     }
 
-    @Data
-    @Builder
     public static class TransferRequest {
-        private String targetDeviceId; // Optional if broadcasting to all user devices
+        private String targetDeviceId;
         private String filename;
         private long size;
         private String fileType;
-        private String downloadUrl; // URL to download the file from backend
-        private String sender; // Populated by backend
+        private String downloadUrl;
+        private String sender;
+
+        public TransferRequest() {
+        }
+
+        public String getTargetDeviceId() {
+            return targetDeviceId;
+        }
+
+        public void setTargetDeviceId(String targetDeviceId) {
+            this.targetDeviceId = targetDeviceId;
+        }
+
+        public String getFilename() {
+            return filename;
+        }
+
+        public void setFilename(String filename) {
+            this.filename = filename;
+        }
+
+        public long getSize() {
+            return size;
+        }
+
+        public void setSize(long size) {
+            this.size = size;
+        }
+
+        public String getFileType() {
+            return fileType;
+        }
+
+        public void setFileType(String fileType) {
+            this.fileType = fileType;
+        }
+
+        public String getDownloadUrl() {
+            return downloadUrl;
+        }
+
+        public void setDownloadUrl(String downloadUrl) {
+            this.downloadUrl = downloadUrl;
+        }
+
+        public String getSender() {
+            return sender;
+        }
+
+        public void setSender(String sender) {
+            this.sender = sender;
+        }
     }
 
-    @Data
-    @Builder
-    @lombok.AllArgsConstructor
-    @lombok.NoArgsConstructor
     public static class TransferResponse {
         private String transferId;
         private boolean accepted;
         private String targetDeviceId;
+
+        public TransferResponse() {
+        }
+
+        public TransferResponse(String transferId, boolean accepted, String targetDeviceId) {
+            this.transferId = transferId;
+            this.accepted = accepted;
+            this.targetDeviceId = targetDeviceId;
+        }
+
+        public String getTransferId() {
+            return transferId;
+        }
+
+        public void setTransferId(String transferId) {
+            this.transferId = transferId;
+        }
+
+        public boolean isAccepted() {
+            return accepted;
+        }
+
+        public void setAccepted(boolean accepted) {
+            this.accepted = accepted;
+        }
+
+        public String getTargetDeviceId() {
+            return targetDeviceId;
+        }
+
+        public void setTargetDeviceId(String targetDeviceId) {
+            this.targetDeviceId = targetDeviceId;
+        }
     }
 }

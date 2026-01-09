@@ -3,20 +3,21 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Wifi, File, Download, X, Laptop, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import WebSocketService from '../../services/websocket.service';
+import { useDeviceName } from '../../context/DeviceNameContext';
 import GlassCard from '../../components/ui/GlassCard';
 
 export default function Receive() {
     const [incomingTransfer, setIncomingTransfer] = useState(null);
     const [isViable, setIsViable] = useState(true);
+    const { deviceName } = useDeviceName();
 
     React.useEffect(() => {
         document.title = "Receive - AnyDrop";
 
         // Connect WebSocket
         WebSocketService.connect(() => {
-            // Register this device
-            const name = localStorage.getItem('anydrop_device_name') || 'This Client';
-            WebSocketService.registerDevice({ name: name });
+            // Register this device with name from context
+            WebSocketService.registerDevice({ name: deviceName || 'This Device' });
 
             WebSocketService.subscribe('/user/queue/transfers', (request) => {
                 setIncomingTransfer(request);
@@ -24,7 +25,7 @@ export default function Receive() {
         });
 
         return () => WebSocketService.disconnect();
-    }, []);
+    }, [deviceName]);
 
     const handleAcceptTransfer = () => {
         if (incomingTransfer?.downloadUrl) {
@@ -79,7 +80,7 @@ export default function Receive() {
                     <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700">
                         <Laptop className="w-4 h-4 text-zinc-500" />
                         <span className="text-sm font-mono font-bold text-zinc-700 dark:text-zinc-300">
-                            {localStorage.getItem('anydrop_device_name') || 'This Device'}
+                            {deviceName || 'This Device'}
                         </span>
                     </div>
                 </div>

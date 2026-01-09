@@ -20,12 +20,17 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/admin")
-@RequiredArgsConstructor
-@Slf4j
 public class AdminController {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AdminController.class);
 
     private final UserRepository userRepository;
     private final HistoryRepository historyRepository;
+
+    public AdminController(UserRepository userRepository, HistoryRepository historyRepository) {
+        this.userRepository = userRepository;
+        this.historyRepository = historyRepository;
+    }
 
     // In a real app, we would inject a SessionRegistry or WebSocket manager to kill
     // sessions.

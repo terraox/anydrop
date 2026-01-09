@@ -18,11 +18,15 @@ import java.nio.file.StandardCopyOption;
 import java.util.Objects;
 
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class FileStorageService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(FileStorageService.class);
+
     private final HistoryRepository historyRepository;
+
+    public FileStorageService(HistoryRepository historyRepository) {
+        this.historyRepository = historyRepository;
+    }
 
     // In a real app, this should be configured. For now, use a local 'uploads' dir.
     private final Path fileStorageLocation = Paths.get("uploads").toAbsolutePath().normalize();
@@ -43,13 +47,12 @@ public class FileStorageService {
             Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
 
             // Log to History
-            HistoryItem item = HistoryItem.builder()
-                    .user(user)
-                    .filename(originalFileName)
-                    .storedFilename(targetLocation.getFileName().toString())
-                    .size(file.getSize())
-                    .type(file.getContentType())
-                    .build();
+            HistoryItem item = new HistoryItem();
+            item.setUser(user);
+            item.setFilename(originalFileName);
+            item.setStoredFilename(targetLocation.getFileName().toString());
+            item.setSize(file.getSize());
+            item.setType(file.getContentType());
 
             return historyRepository.save(item);
 
