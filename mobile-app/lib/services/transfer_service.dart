@@ -198,14 +198,35 @@ class TransferService extends ChangeNotifier {
     final request = _pendingRequest!;
     _pendingRequest = null;
     
-    // Request storage permission
-    var permStatus = await Permission.storage.request();
-    if (permStatus.isDenied) {
-      permStatus = await Permission.manageExternalStorage.request();
+    // Request storage permission - handle Android 13+ differently
+    bool hasPermission = false;
+    
+    // Try manage external storage first (needed for Downloads folder on Android 11+)
+    var manageStatus = await Permission.manageExternalStorage.status;
+    if (manageStatus.isDenied) {
+      manageStatus = await Permission.manageExternalStorage.request();
     }
     
-    if (!permStatus.isGranted && !await Permission.storage.isGranted) {
-      debugPrint('❌ Storage permission denied');
+    if (manageStatus.isGranted) {
+      hasPermission = true;
+    } else {
+      // Fall back to regular storage permission (Android 12 and below)
+      var storageStatus = await Permission.storage.status;
+      if (storageStatus.isDenied) {
+        storageStatus = await Permission.storage.request();
+      }
+      hasPermission = storageStatus.isGranted;
+    }
+    
+    if (!hasPermission) {
+      debugPrint('❌ Storage permission denied - rejecting transfer');
+      // Send rejection back to sender so they don't hang
+      _send({
+        'type': 'TRANSFER_RESPONSE',
+        'targetId': request['senderId'],
+        'transferId': request['transferId'],
+        'status': 'REJECTED',
+      });
       notifyListeners();
       return;
     }
