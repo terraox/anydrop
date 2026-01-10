@@ -4,6 +4,10 @@ import 'package:stomp_dart_client/stomp_dart_client.dart';
 import '../core/constants/api_constants.dart';
 
 /// WebSocket service using STOMP protocol
+/// 
+/// IMPORTANT: This service uses STOMP and is NOT used for local file transfer.
+/// Local file transfer uses plain WebSocket via TransferService.connectToReceiver().
+/// This service is kept for other features (trackpad, etc.) but NOT for file transfer.
 class WebSocketService {
   StompClient? _client;
   
@@ -24,12 +28,36 @@ class WebSocketService {
   StompClient? get client => _client;
 
   /// Connect to the WebSocket server
-  void connect({String? token}) {
+  /// IMPORTANT: This service uses STOMP and is NOT used for local file transfer.
+  /// For local file transfer, use TransferService.connectToReceiver() with discovered device IP.
+  /// This method is for connecting to the main server, not for local file transfer.
+  /// 
+  /// DISABLED for local file transfer - do not use this for file transfers.
+  void connect({String? token, String? deviceIp, int? devicePort}) {
     if (_isConnected) return;
 
-    // "http://IP:8080/ws" -> "ws://IP:8080/ws"
-    // ApiConstants.baseUrl is http://...
-    String wsUrl = ApiConstants.baseUrl.replaceFirst('http', 'ws') + '/ws';
+    // VALIDATE: For local file transfer, device IP/port MUST be provided
+    // Do not allow fallback to hardcoded localhost
+    if (deviceIp == null || devicePort == null) {
+      print('❌ ERROR: deviceIp and devicePort are required for WebSocket connection');
+      print('   Do not use hardcoded localhost - use discovered device IP from mDNS');
+      print('   For local file transfer, use TransferService.connectToReceiver() instead');
+      return;
+    }
+
+    // VALIDATE: Do not allow localhost
+    if (deviceIp == 'localhost' || deviceIp == '127.0.0.1') {
+      print('❌ ERROR: Cannot use localhost for WebSocket connection');
+      print('   Use discovered device IP from mDNS instead');
+      return;
+    }
+
+    // Use discovered device IP from mDNS (never localhost)
+    // Use single path /ws (not /ws/transfer or /ws/stream)
+    final wsUrl = 'ws://$deviceIp:$devicePort/ws';
+    print('🔌 Connecting to WebSocket at discovered device: $wsUrl');
+    print('   ✅ Using discovered IP from mDNS (not localhost)');
+    print('   ✅ Single WebSocket path: /ws');
 
     _client = StompClient(
       config: StompConfig(
@@ -93,6 +121,23 @@ class WebSocketService {
 
   void sendSentryAlert(double magnitude) {
     send('/app/sentry/alert', {'magnitude': magnitude});
+  }
+
+  /// Connect to a specific device using discovered IP from mDNS
+  /// IMPORTANT: This service uses STOMP and is NOT used for local file transfer.
+  /// For local file transfer, use TransferService.connectToReceiver() instead.
+  /// 
+  /// This method is kept for other features (trackpad, etc.) but NOT for file transfer.
+  void connectToDevice(String deviceIp, int devicePort, {String? token}) {
+    // VALIDATE: Do not allow localhost
+    if (deviceIp == 'localhost' || deviceIp == '127.0.0.1') {
+      print('❌ ERROR: Cannot use localhost for WebSocket connection');
+      print('   Use discovered device IP from mDNS instead');
+      return;
+    }
+    
+    disconnect(); // Disconnect existing connection first
+    connect(token: token, deviceIp: deviceIp, devicePort: devicePort);
   }
 
   void dispose() {

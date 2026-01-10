@@ -1,0 +1,22 @@
+{
+  "name": "anydrop",
+  "version": "1.0.0",
+  "description": "AnyDrop - File Transfer Application",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n \"backend,frontend\" -c \"blue,green\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend-node && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "start": "concurrently -n \"backend,frontend\" -c \"blue,green\" \"npm run start:backend\" \"npm run start:frontend\"",
+    "start:backend": "cd backend-node && npm start",
+    "start:frontend": "cd frontend && npm run preview",
+    "install:all": "npm install && cd backend-node && npm install && cd ../frontend && npm install",
+    "build": "cd frontend && npm run build"
+  },
+  "keywords": ["anydrop", "file-transfer"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

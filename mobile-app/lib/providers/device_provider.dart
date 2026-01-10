@@ -29,7 +29,7 @@ class DeviceProvider extends ChangeNotifier {
 
   final WebSocketService _wsService = WebSocketService();
   final BroadcastService _broadcastService = BroadcastService();
-  final HttpServerService _httpServer = HttpServerService();
+  final HttpServerService _httpServer; // Injected
   final FileStreamService _fileStreamService = FileStreamService();
   final DiscoveryProvider _discoveryProvider = DiscoveryProvider();
 
@@ -71,6 +71,8 @@ class DeviceProvider extends ChangeNotifier {
           status: DeviceStatus.online,
           batteryLevel: 100,
           deviceIcon: d.icon,
+          ip: d.ip,
+          port: d.port,
           lastSeen: DateTime.now(),
         ))
         .toList();
@@ -78,7 +80,7 @@ class DeviceProvider extends ChangeNotifier {
     return mdnsDevices;
   }
 
-  DeviceProvider() {
+  DeviceProvider(this._httpServer) {
     _initialize();
   }
 
@@ -148,17 +150,30 @@ class DeviceProvider extends ChangeNotifier {
   }
 
   void _setupWebSocketListeners() {
-    _wsService.connectionStatus.listen((connected) {
-      _isConnected = connected;
-      if (connected) {
-        _registerDevice();
-        _setupTransferListener();
-      }
-      notifyListeners();
-    });
+    // IMPORTANT: Receiver should NOT create WebSocket clients
+    // Receiver only hosts HTTP server to receive files
+    // WebSocket clients are only for senders connecting to receivers
+    // For local file transfer, we don't need WebSocket - files come via HTTP POST /upload
+    // 
+    // NO WebSocket connections should be created here - receiver only hosts HTTP server
+    // _wsService (STOMP) is NOT used for local file transfer
+    debugPrint('✅ Receiver mode: HTTP server only, no WebSocket client connections');
+    debugPrint('   Files are received via HTTP POST /upload');
+    debugPrint('   STOMP WebSocket service (_wsService) is NOT used for local file transfer');
+    _isConnected = true; // Mark as connected since HTTP server is running
+    notifyListeners();
+    
+    // DISABLED - Receiver must NEVER create WebSocket clients
+    // All WebSocket client creation removed for receiver
+    // _wsService is kept for other features (trackpad, etc.) but NOT for file transfer
   }
 
   void _setupTransferListener() {
+    // DISABLED - Files are received via HTTP POST /upload, not WebSocket
+    // The HTTP server (HttpServerService) handles incoming file transfers
+    debugPrint('⚠️ WebSocket transfer listener disabled - using HTTP for file reception');
+    
+    /* DISABLED - Use HTTP instead
     _wsService.subscribe('/user/queue/transfers', (frame) {
       if (frame.body != null) {
         try {
@@ -182,6 +197,7 @@ class DeviceProvider extends ChangeNotifier {
         }
       }
     });
+    */
   }
 
   Future<void> _registerDevice() async {
@@ -321,6 +337,13 @@ class DeviceProvider extends ChangeNotifier {
       }
       
       if (status.isGranted || await Permission.storage.isGranted || await Permission.manageExternalStorage.isGranted) {
+           // DISABLED - FileStreamService uses WebSocket which is disabled for file transfer
+           // Files are received via HTTP POST /upload, not WebSocket
+           debugPrint('❌ FileStreamService.receiveFile() is disabled');
+           debugPrint('   Files are received via HTTP POST /upload handler in HttpServerService');
+           debugPrint('   TransferService._handleHttpTransfer() handles incoming files');
+           
+           /* DISABLED - Use HTTP POST /upload instead
            _fileStreamService.onProgress = (progress) {
               _transferProgress = progress;
               notifyListeners();
@@ -340,6 +363,7 @@ class DeviceProvider extends ChangeNotifier {
            };
 
            await _fileStreamService.receiveFile(transfer.id, transfer.name, transfer.sizeBytes);
+           */
       } else {
         debugPrint("❌ Permission Denied");
         _isTransferring = false;
@@ -373,24 +397,38 @@ class DeviceProvider extends ChangeNotifier {
 
   /// Connect to a specific device using its discovered IP
   Future<void> connectToDevice(String ip, int port, {String? token}) async {
-    // For mDNS-discovered devices, we connect directly to their IP
-    final wsUrl = 'ws://$ip:$port/ws';
-    debugPrint('📡 Connecting to device at $wsUrl');
-    // The WebSocket service can be extended to support direct connections
+    // DISABLED - Receiver should NOT create WebSocket connections
+    // This method is for senders only, not receivers
+    // Receiver only hosts HTTP server - files are received via HTTP POST /upload
+    debugPrint('⚠️ connectToDevice() disabled for receiver');
+    debugPrint('   Receiver hosts HTTP server only - no WebSocket client needed');
+    // Do nothing - receiver does not connect to WebSocket
   }
 
   Future<void> connectToServer({String? token}) async {
-    _wsService.connect(token: token);
+    // IMPORTANT: Receiver should NOT connect to WebSocket servers
+    // Receiver only hosts HTTP server - files are received via HTTP POST /upload
+    // This method is for connecting to main server, not for local file transfer
+    debugPrint('⚠️ connectToServer() disabled for local file transfer');
+    debugPrint('   Receiver hosts HTTP server only - no WebSocket client needed');
+    _isConnected = true; // HTTP server is running
+    notifyListeners();
+    
+    // DISABLED for local file transfer
+    // _wsService.connect(token: token);
   }
 
   void disconnectFromServer() {
-    _wsService.disconnect();
+    // Receiver doesn't need to disconnect - HTTP server stays running
+    debugPrint('⚠️ disconnectFromServer() - HTTP server remains running for file reception');
+    // _wsService.disconnect();
   }
 
   @override
   void dispose() {
     _discoveryProvider.dispose();
     _broadcastService.stopBroadcasting();
+    // Note: _wsService is not used for local file transfer, but dispose it anyway for cleanup
     _wsService.dispose();
     super.dispose();
   }

@@ -10,6 +10,8 @@ class Device {
   final DeviceStatus status;
   final int batteryLevel;
   final String? deviceIcon; // e.g., 'mobile', 'laptop' which maps to an Icon
+  final String? ip;
+  final int? port;
   final DateTime lastSeen;
 
   Device({
@@ -20,6 +22,8 @@ class Device {
     this.status = DeviceStatus.online,
     this.batteryLevel = 100,
     this.deviceIcon,
+    this.ip,
+    this.port,
     DateTime? lastSeen,
   }) : lastSeen = lastSeen ?? DateTime.now();
 
@@ -32,6 +36,8 @@ class Device {
       status: DeviceStatus.online, // Default to online if we receive it
       batteryLevel: json['batteryLevel'] ?? 100,
       deviceIcon: json['deviceIcon'],
+      ip: json['ip'],
+      port: json['port'],
       lastSeen: DateTime.now(),
     );
   }
@@ -44,6 +50,8 @@ class Device {
       'type': type,
       'batteryLevel': batteryLevel,
       'deviceIcon': deviceIcon,
+      'ip': ip,
+      'port': port,
     };
   }
 

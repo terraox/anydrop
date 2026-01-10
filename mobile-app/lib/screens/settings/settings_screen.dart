@@ -8,6 +8,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/device_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/glassmorphic_container.dart';
+import '../../widgets/connectivity_test_widget.dart';
 
 /// Settings screen with grouped sections
 class SettingsScreen extends StatefulWidget {
@@ -183,6 +184,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ],
                     ),
                   ),
+                ],
+              ),
+
+              const SizedBox(height: 24),
+
+              // Local File Transfer Connection Test
+              _buildSection(
+                title: 'LOCAL FILE TRANSFER',
+                children: [
+                  const ConnectivityTestWidget(),
                 ],
               ),
 

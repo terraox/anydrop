@@ -18,22 +18,23 @@ dependencies:
   stomp_dart_client: ^3.0.0
 
   # File Handling
-  file_picker: ^10.0.0
-  open_file_plus: ^8.1.0
-  image_gallery_saver: ^2.0.3
+  file_picker: ^8.0.0
+  open_file_plus: any
+  image_gallery_saver_plus: ^4.0.1
 
   # Sensors (Sentry Mode)
-  sensors_plus: ^7.0.0
+  sensors_plus: ^5.0.1
 
   # Animations
   flutter_animate: ^4.5.0
 
   # Device Info
-  device_info_plus: ^12.0.0
+  device_info_plus: ^10.1.0
 
   # Utilities
   shared_preferences: ^2.5.0
   http: ^1.2.0
+  http_parser: ^4.0.0
 
   # Icons
   lucide_icons: ^0.257.0
@@ -42,10 +43,11 @@ dependencies:
   nsd: ^3.0.0
 
   # Network Info (for subnet scanning)
-  network_info_plus: ^6.0.0
+  network_info_plus: ^5.0.0
 
   # HTTP Server (for web app to discover phone)
   shelf: ^1.4.0
+  mime: ^1.0.0
 
   # File System & Permissions
   path_provider: ^2.1.2
@@ -54,7 +56,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
+  flutter_lints: ^3.0.1
 
 flutter:
   uses-material-design: true

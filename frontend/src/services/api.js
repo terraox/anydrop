@@ -7,7 +7,7 @@ const baseURL = getBackendBaseURL();
 
 const api = axios.create({
     baseURL,
-    timeout: 10000, // 10 second timeout
+    timeout: 15000, // 15 second timeout for local dev
     headers: {
         'Content-Type': 'application/json',
     },

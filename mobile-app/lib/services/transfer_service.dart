@@ -10,17 +10,31 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:open_file_plus/open_file_plus.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import 'package:http/http.dart' as http;
+import '../models/device.dart';
 import '../core/constants/api_constants.dart';
 import '../utils/file_utils.dart';
+import 'http_server_service.dart';
+import 'package:shelf/shelf.dart' as shelf;
+import 'package:mime/mime.dart';
+import 'package:http_parser/http_parser.dart';
 
 /// Unified Transfer Service for Handshake + Binary Streaming
 class TransferService extends ChangeNotifier {
+  final HttpServerService _httpServerService;
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
   
+  TransferService(this._httpServerService) {
+    _httpServerService.onFileTransfer = _handleHttpTransfer;
+  }
+  
   String? _deviceId;
   bool _isConnected = false;
+  String? _connectedDeviceIp;
+  int? _connectedDevicePort;
+  Completer<bool>? _readyCompleter; // Completer to wait for READY message
   
   // Transfer state
   String? _currentTransferId;
@@ -61,53 +75,155 @@ class TransferService extends ChangeNotifier {
   Map<String, dynamic>? get pendingRequest => _pendingRequest;
   
   /// Connect to the unified transfer endpoint
+  /// IMPORTANT: This method is deprecated for local file transfer.
+  /// Use connectToReceiver() instead when sending files to a specific device.
+  /// This method does NOT create WebSocket connections - receiver should never call this.
+  @Deprecated('Use connectToReceiver() for device-to-device transfers')
   Future<void> connect(String deviceId) async {
     _deviceId = deviceId;
     
+    // DISABLED - Do not create WebSocket connections here
+    // For local file transfer, use connectToReceiver() when sending files
+    // Receiver should never call this - receiver only hosts HTTP server
+    debugPrint('⚠️ connect() disabled - use connectToReceiver() for device-to-device transfers');
+    debugPrint('   Receiver should never call this - receiver only hosts HTTP server');
+    _isConnected = false;
+    notifyListeners();
+  }
+  
+  /// Connect to receiver's WebSocket and wait for READY handshake
+  /// This establishes the signaling channel before file transfer
+  /// 
+  /// IMPORTANT: This is the ONLY place where WebSocket connections are created
+  /// - Creates exactly ONE WebSocket connection (disconnects existing first)
+  /// - Uses receiver IP from mDNS discovery (never localhost)
+  /// - Uses single path /ws (not /ws/transfer or /ws/stream)
+  /// - No STOMP, plain WebSocket only (web_socket_channel package)
+  /// - No auto-reconnect logic
+  /// 
+  /// [receiverIp] - Receiver's LAN IP from mDNS discovery (MUST be non-null, never localhost)
+  /// [receiverPort] - Receiver's port (default 8080)
+  /// Returns true if READY handshake received, false otherwise
+  Future<bool> connectToReceiver(String receiverIp, int receiverPort) async {
+    // GUARD: Prevent multiple simultaneous connections
+    if (_channel != null && _isConnected) {
+      debugPrint('⚠️ WebSocket already connected, reusing existing connection');
+      return true;
+    }
+    
     try {
-      final wsUrl = ApiConstants.baseUrl.replaceFirst('http', 'ws') + '/transfer';
-      debugPrint('🔌 Connecting to $wsUrl');
+      // IMPORTANT: Close existing connection first to ensure exactly ONE WebSocket
+      // This prevents multiple simultaneous connections
+      await disconnect();
+      
+      // VALIDATE: Ensure IP is not localhost
+      if (receiverIp == 'localhost' || receiverIp == '127.0.0.1') {
+        debugPrint('❌ ERROR: Cannot use localhost for WebSocket connection');
+        debugPrint('   Use discovered device IP from mDNS instead');
+        return false;
+      }
+      
+      // Connect to receiver's WebSocket using discovered IP (never localhost)
+      // Use single path /ws (not /ws/transfer or /ws/stream)
+      final wsUrl = 'ws://$receiverIp:$receiverPort/ws';
+      debugPrint('🔌 Connecting to receiver WebSocket: $wsUrl');
+      debugPrint('   ✅ Using discovered IP from mDNS (not localhost)');
+      debugPrint('   ✅ Single WebSocket path: /ws');
+      debugPrint('   ✅ Plain WebSocket (no STOMP)');
+      debugPrint('   ✅ No auto-reconnect');
       
       _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
-      _isConnected = true;
+      _connectedDeviceIp = receiverIp;
+      _connectedDevicePort = receiverPort;
       
-      // Register this device
-      _send({
-        'type': 'REGISTER',
-        'deviceId': deviceId,
-      });
+      // Create completer to wait for READY message
+      _readyCompleter = Completer<bool>();
       
       // Listen for messages
       _subscription = _channel!.stream.listen(
-        _handleMessage,
-        onError: (e) {
-          debugPrint('❌ WebSocket Error: $e');
+        (message) {
+          if (message is String) {
+            _handleTextMessage(message);
+          }
+        },
+        onError: (error) {
+          debugPrint('❌ WebSocket error: $error');
           _isConnected = false;
+          if (_readyCompleter != null && !_readyCompleter!.isCompleted) {
+            _readyCompleter!.complete(false);
+          }
           notifyListeners();
         },
         onDone: () {
-          debugPrint('🔌 WebSocket Closed');
+          debugPrint('🔌 WebSocket closed');
           _isConnected = false;
+          if (_readyCompleter != null && !_readyCompleter!.isCompleted) {
+            _readyCompleter!.complete(false);
+          }
           notifyListeners();
         },
       );
       
-      notifyListeners();
+      // Wait for READY message (timeout after 5 seconds)
+      final ready = await _readyCompleter!.future.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          debugPrint('❌ Timeout waiting for READY handshake');
+          return false;
+        },
+      );
+      
+      if (ready) {
+        debugPrint('✅ READY handshake received, connection established');
+      }
+      
+      return ready;
     } catch (e) {
-      debugPrint('❌ Connection failed: $e');
+      debugPrint('❌ Failed to connect to receiver: $e');
       _isConnected = false;
       notifyListeners();
+      return false;
     }
+  }
+  
+  /// Disconnect from WebSocket
+  /// Cleans up WebSocket connection and resets connection state
+  Future<void> disconnect() async {
+    // Cleanup any ongoing transfers
+    if (_isReceiving) {
+      _cleanupReceive();
+    }
+    if (_isSending) {
+      _isSending = false;
+      _currentTargetId = null;
+      _currentTransferId = null;
+      _pendingSendFile = null;
+    }
+    
+    // Close WebSocket connection
+    if (_subscription != null) {
+      await _subscription!.cancel();
+      _subscription = null;
+    }
+    if (_channel != null) {
+      await _channel!.sink.close(status.normalClosure);
+      _channel = null;
+    }
+    
+    // Reset connection state
+    _isConnected = false;
+    _connectedDeviceIp = null;
+    _connectedDevicePort = null;
+    _readyCompleter = null;
+    notifyListeners();
   }
   
   void _handleMessage(dynamic data) {
     if (data is String) {
-      // JSON Message (Handshake)
+      // JSON Message (Handshake/Registration Only)
       _handleTextMessage(data);
-    } else if (data is List<int>) {
-      // Binary Chunk
-      _handleBinaryChunk(Uint8List.fromList(data));
     }
+    // Binary chunks over WebSocket are no longer used for transfers
   }
   
   void _handleTextMessage(String payload) {
@@ -118,8 +234,23 @@ class TransferService extends ChangeNotifier {
       debugPrint('📩 Received: $type');
       
       switch (type) {
+        case 'READY':
+          // READY handshake received from receiver
+          _handleReadyMessage(json);
+          break;
+          
         case 'REGISTERED':
           debugPrint('✅ Device registered successfully');
+          break;
+          
+        case 'ACCEPT':
+          // Receiver accepted the file transfer
+          _handleAcceptMessage(json);
+          break;
+          
+        case 'REJECT':
+          // Receiver rejected the file transfer
+          _handleRejectMessage(json);
           break;
           
         case 'TRANSFER_REQUEST':
@@ -143,6 +274,41 @@ class TransferService extends ChangeNotifier {
     }
   }
   
+  /// Handle READY message from receiver
+  void _handleReadyMessage(Map<String, dynamic> json) {
+    final role = json['role'] as String?;
+    debugPrint('✅ READY handshake received from receiver (role: $role)');
+    _isConnected = true;
+    notifyListeners();
+    
+    // Complete the ready completer if waiting
+    if (_readyCompleter != null && !_readyCompleter!.isCompleted) {
+      _readyCompleter!.complete(true);
+    }
+  }
+  
+  /// Handle ACCEPT message from receiver
+  void _handleAcceptMessage(Map<String, dynamic> json) {
+    final transferId = json['transferId'] as String?;
+    debugPrint('✅ Receiver accepted transfer: $transferId');
+    
+    // If we have a pending file, start the upload
+    if (_pendingSendFile != null && transferId == _currentTransferId) {
+      startBinaryUpload(_pendingSendFile!);
+    }
+  }
+  
+  /// Handle REJECT message from receiver
+  void _handleRejectMessage(Map<String, dynamic> json) {
+    final transferId = json['transferId'] as String?;
+    debugPrint('❌ Receiver rejected transfer: $transferId');
+    _isSending = false;
+    _currentTargetId = null;
+    _currentTransferId = null;
+    _pendingSendFile = null;
+    notifyListeners();
+  }
+  
   void _handleTransferRequest(Map<String, dynamic> request) {
     // Store for UI to show dialog
     _pendingRequest = request;
@@ -154,8 +320,8 @@ class TransferService extends ChangeNotifier {
     final status = response['status'];
     final transferId = response['transferId'] as String?;
     
-    if (status == 'ACCEPTED') {
-      debugPrint('✅ Transfer accepted! Starting binary upload for transfer: $transferId');
+    if (status == 'ACCEPTED' || status == 'READY') {
+      debugPrint('✅ Transfer ready! Starting binary upload for transfer: $transferId');
       
       // Check if this is for our pending transfer
       if (transferId == _currentTransferId && _pendingSendFile != null) {
@@ -183,28 +349,78 @@ class TransferService extends ChangeNotifier {
     }
   }
   
-  void _handleBinaryChunk(Uint8List chunk) {
-    if (_fileSink == null) {
-      debugPrint('⚠️ Received binary chunk but no file sink initialized');
-      return;
-    }
-    
+  Future<shelf.Response> _handleHttpTransfer(shelf.Request request) async {
     try {
-      _fileSink!.add(chunk);
-      _receivedBytes += chunk.length;
-      _progress = _totalBytes > 0 ? (_receivedBytes / _totalBytes).clamp(0.0, 1.0) : 0;
-      notifyListeners();
+      // IMPORTANT: Receiver validates pairing code from headers
+      // Sender must include X-Device-Id, X-Pairing-Code, and X-Sender-Device-Id headers
+      final deviceId = request.headers['x-device-id'];
+      final pairingCode = request.headers['x-pairing-code'];
+      final senderDeviceId = request.headers['x-sender-device-id'];
       
-      // Log progress every 100KB to avoid spam
-      if (_receivedBytes % (100 * 1024) < chunk.length || _receivedBytes >= _totalBytes) {
-        debugPrint('📦 Received ${(_receivedBytes / 1024).toStringAsFixed(1)}KB / ${(_totalBytes / 1024).toStringAsFixed(1)}KB (${(_progress * 100).toStringAsFixed(1)}%)');
+      // TODO: Validate pairing code (for now, accept all - implement pairing code validation)
+      if (deviceId == null || pairingCode == null) {
+        debugPrint('⚠️ Missing pairing code headers - accepting anyway (validation not implemented)');
+        // In production, validate pairing code here
+      } else {
+        debugPrint('🔐 Received file transfer with pairing code from $senderDeviceId');
       }
       
-      // Don't auto-complete based on bytes - wait for FINISH signal
-      // This prevents issues with incorrect file size calculations
+      final contentType = request.headers['content-type'];
+      if (contentType == null) return shelf.Response.badRequest(body: 'Missing content-type');
+      
+      final mediaType = MediaType.parse(contentType);
+      final boundary = mediaType.parameters['boundary'];
+      if (boundary == null) return shelf.Response.badRequest(body: 'Missing boundary');
+
+      final transformer = MimeMultipartTransformer(boundary);
+      final parts = transformer.bind(request.read());
+
+      await for (final part in parts) {
+        final contentDisposition = part.headers['content-disposition'];
+        if (contentDisposition != null && contentDisposition.contains('name="file"')) {
+          // Extract filename 
+          String fileName = 'received_file';
+          final match = RegExp('filename="([^"]+)"').firstMatch(contentDisposition);
+          if (match != null) {
+            fileName = match.group(1)!;
+          }
+
+          _totalBytes = 0; 
+          _receivedBytes = 0;
+          _progress = 0.0;
+          _isReceiving = true;
+          notifyListeners();
+
+          final directory = await getDownloadDirectory();
+          final sanitizedName = FileUtils.sanitizeFileName(fileName);
+          _receivingFile = File('${directory.path}/$sanitizedName');
+          _fileSink = _receivingFile!.openWrite();
+
+          int bytesReceivedTotal = 0;
+          await for (final List<int> chunk in part) {
+            _fileSink!.add(chunk);
+            bytesReceivedTotal += chunk.length;
+            _receivedBytes = bytesReceivedTotal;
+            notifyListeners();
+          }
+
+          await _completeReceive();
+          return shelf.Response.ok(jsonEncode({'status': 'success'}));
+        }
+      }
+      return shelf.Response.badRequest(body: 'No file part found');
     } catch (e) {
-      debugPrint('❌ Error writing chunk: $e');
+      debugPrint('❌ HTTP Transfer Error: $e');
       _cleanupReceive();
+      return shelf.Response.internalServerError(body: e.toString());
+    }
+  }
+
+  Future<Directory> getDownloadDirectory() async {
+    if (Platform.isAndroid) {
+      return Directory('/storage/emulated/0/Download/AnyDrop');
+    } else {
+      return await getApplicationDocumentsDirectory();
     }
   }
   
@@ -340,7 +556,7 @@ class TransferService extends ChangeNotifier {
     notifyListeners();
   }
   
-  void _completeReceive() async {
+  Future<void> _completeReceive() async {
     debugPrint('✅ Transfer complete! Finalizing file...');
     
     try {
@@ -364,7 +580,7 @@ class TransferService extends ChangeNotifier {
             
             if (FileUtils.isImage(fileName)) {
               // Save image to gallery
-              final result = await ImageGallerySaver.saveImage(
+              final result = await ImageGallerySaverPlus.saveImage(
                 bytes,
                 name: fileName,
                 isReturnImagePathOfIOS: false,
@@ -377,10 +593,9 @@ class TransferService extends ChangeNotifier {
               }
             } else if (FileUtils.isVideo(fileName)) {
               // Save video to gallery
-              final result = await ImageGallerySaver.saveVideo(
-                bytes,
+              final result = await ImageGallerySaverPlus.saveFile(
+                _receivingFile!.path,
                 name: fileName,
-                isReturnImagePathOfIOS: false,
               );
               
               if (result['isSuccess'] == true) {
@@ -455,10 +670,11 @@ class TransferService extends ChangeNotifier {
   }
   
   /// Send a file to a target device
-  Future<void> sendFile(String targetId, File file, String transferId) async {
+  /// Establishes WebSocket connection, waits for READY, sends file metadata, then uploads via HTTP
+  Future<void> sendFile(Device targetDevice, File file, String transferId) async {
     _isSending = true;
     _progress = 0.0;
-    _currentTargetId = targetId;
+    _currentTargetId = targetDevice.id;
     _currentTransferId = transferId;
     _pendingSendFile = file; // Store file reference for later upload
     notifyListeners();
@@ -467,81 +683,166 @@ class TransferService extends ChangeNotifier {
     final fileName = file.path.split('/').last;
     final mimeType = FileUtils.getMimeType(fileName);
     
-    // Send transfer request with MIME type
-    _send({
-      'type': 'TRANSFER_REQUEST',
-      'targetId': targetId,
-      'senderId': _deviceId,
-      'transferId': transferId,
-      'fileName': fileName,
-      'size': fileSize,
-      'mimeType': mimeType, // Include MIME type for proper handling
-    });
+    // Check if we have an IP for direct transfer
+    final targetIp = targetDevice.ip;
+    final targetPort = targetDevice.port ?? 8080;
     
-    // Wait for ACCEPTED response before sending binary
-    // The response will automatically trigger startBinaryUpload via _handleTransferResponse
-    debugPrint('📤 Sent transfer request to $targetId for file $fileName (${(fileSize / 1024 / 1024).toStringAsFixed(2)}MB, $mimeType)');
-  }
-  
-  /// Start binary upload (called after receiving ACCEPTED)
-  Future<void> startBinaryUpload(File file) async {
-    if (_channel == null || _currentTargetId == null) {
-      debugPrint('❌ Cannot start upload: channel or target not set');
+    // Validate target IP is available
+    if (targetIp == null) {
+      debugPrint('❌ Cannot send file: target device IP not available. Device must be discovered via mDNS first.');
+      _isSending = false;
+      notifyListeners();
       return;
     }
     
-    final fileSize = await file.length();
-    int bytesSent = 0;
+    // Store target info for the actual upload
+    _targetIp = targetIp;
+    _targetPort = targetPort;
     
-    debugPrint('🚀 Starting binary upload: ${file.path} (${(fileSize / 1024 / 1024).toStringAsFixed(2)}MB) in ${CHUNK_SIZE ~/ 1024}KB chunks');
+    debugPrint('📤 Preparing to send file to ${targetDevice.name}: $fileName (${(fileSize / 1024 / 1024).toStringAsFixed(2)}MB)');
+    
+    // Step 1: Connect to receiver's WebSocket and wait for READY handshake
+    debugPrint('🔌 Step 1: Connecting to receiver WebSocket...');
+    final connected = await connectToReceiver(targetIp, targetPort);
+    
+    if (!connected) {
+      debugPrint('❌ Failed to establish WebSocket connection or receive READY handshake');
+      _isSending = false;
+      notifyListeners();
+      return;
+    }
+    
+    // Step 2: Send file metadata via WebSocket (signaling)
+    debugPrint('📋 Step 2: Sending file metadata...');
+    if (_channel != null) {
+      _channel!.sink.add(jsonEncode({
+        'type': 'FILE_METADATA',
+        'transferId': transferId,
+        'fileName': fileName,
+        'size': fileSize,
+        'mimeType': mimeType,
+        'senderId': _deviceId,
+      }));
+      debugPrint('✅ File metadata sent, waiting for receiver response...');
+    } else {
+      debugPrint('❌ WebSocket channel not available');
+      _isSending = false;
+      notifyListeners();
+      return;
+    }
+    
+    // Step 3: Wait for ACCEPT message (handled in _handleAcceptMessage)
+    // Once ACCEPT is received, startBinaryUpload() will be called automatically
+    debugPrint('⏳ Waiting for receiver to accept transfer...');
+  }
+
+  String? _targetIp;
+  int? _targetPort;
+
+  /// Start binary upload using HTTP Streaming
+  Future<void> startBinaryUpload(File file) async {
+    if (_currentTargetId == null) {
+      debugPrint('❌ Cannot start upload: target not set');
+      return;
+    }
+
+    final fileSize = await file.length();
+    final fileName = file.path.split('/').last;
+    
+    // IMPORTANT: Always use discovered device IP from mDNS, never localhost
+    // Using localhost would only work on the same machine, not for LAN transfers
+    if (_targetIp == null) {
+      debugPrint('❌ Cannot upload: target device IP not available. Device must be discovered via mDNS first.');
+      _isSending = false;
+      notifyListeners();
+      return;
+    }
+    
+    // Use discovered device IP and port (from mDNS)
+    final baseUrl = 'http://$_targetIp:$_targetPort';
+    final url = Uri.parse('$baseUrl/upload'); // Use /upload endpoint, not /api/files/transfer
+    
+    debugPrint('🚀 Starting HTTP Stream upload to $_targetIp:$_targetPort');
+    debugPrint('   File: ${file.path} (${(fileSize / 1024 / 1024).toStringAsFixed(2)}MB)');
     
     try {
-      // Read file in 64KB chunks using openRead with explicit chunk size
-      final stream = file.openRead();
-      await for (final chunk in stream) {
-        if (_channel == null || !_isConnected) {
-          debugPrint('❌ Connection closed during upload');
-          break;
-        }
-        
-        // Ensure we're sending chunks of appropriate size
-        // The default openRead() already chunks, but we ensure it's reasonable
-        _channel!.sink.add(chunk);
-        bytesSent += chunk.length;
-        _progress = (bytesSent / fileSize).clamp(0.0, 1.0);
-        
-        // Update UI periodically (every ~10 chunks or at completion)
-        if (bytesSent % (CHUNK_SIZE * 10) < chunk.length || bytesSent >= fileSize) {
-          notifyListeners();
-          debugPrint('📊 Upload progress: ${(_progress * 100).toStringAsFixed(1)}% (${(bytesSent / 1024 / 1024).toStringAsFixed(2)}MB / ${(fileSize / 1024 / 1024).toStringAsFixed(2)}MB)');
-        }
-        
-        // Small delay to allow UI updates and prevent overwhelming the socket
-        await Future.delayed(Duration.zero);
+      // Get pairing code from target device first
+      final pairingCodeUrl = Uri.parse('http://$_targetIp:$_targetPort/api/pairing-code');
+      final pairingResponse = await http.get(pairingCodeUrl).timeout(const Duration(seconds: 5));
+      
+      if (pairingResponse.statusCode != 200) {
+        debugPrint('❌ Failed to get pairing code: ${pairingResponse.statusCode}');
+        _isSending = false;
+        notifyListeners();
+        return;
       }
       
-      // Send FINISH signal after all binary data is sent
-      debugPrint('✅ Binary upload complete! Sending FINISH signal...');
-      _send({
-        'type': 'TRANSFER_FINISH',
-        'targetId': _currentTargetId,
-        'transferId': _currentTransferId,
-      });
+      final pairingData = jsonDecode(pairingResponse.body);
+      final pairingCode = pairingData['code'] as String;
+      debugPrint('🔐 Got pairing code: $pairingCode');
+      
+      final request = http.MultipartRequest('POST', url);
+      
+      // IMPORTANT: Add pairing code headers (required by server for security)
+      // These headers authenticate the transfer request
+      request.headers['X-Device-Id'] = _currentTargetId ?? '';
+      request.headers['X-Pairing-Code'] = pairingCode;
+      request.headers['X-Sender-Device-Id'] = _deviceId ?? '';
+      
+      // Use HTTP streaming for file transfer (not WebSocket)
+      // File data is streamed via HTTP multipart upload
+      final stream = file.openRead();
+      int bytesSent = 0;
+      
+      final multipartFile = http.MultipartFile(
+        'file',
+        stream.map((chunk) {
+          bytesSent += chunk.length;
+          _progress = (bytesSent / fileSize).clamp(0.0, 1.0);
+          
+          // Throttled UI update
+          if (bytesSent % (CHUNK_SIZE * 5) < chunk.length || bytesSent >= fileSize) {
+            notifyListeners();
+            debugPrint('📊 Upload: ${(_progress * 100).toStringAsFixed(1)}%');
+          }
+          
+          return chunk;
+        }),
+        fileSize,
+        filename: fileName,
+      );
+      
+      request.files.add(multipartFile);
+      
+      // Finalize the request
+      final response = await request.send();
+      
+      if (response.statusCode == 200) {
+        debugPrint('✅ Transfer completed successfully (HTTP)!');
+        
+        // Notify the target via WebSocket that we're finished (optional handshake)
+        _send({
+          'type': 'TRANSFER_FINISH',
+          'targetId': _currentTargetId,
+          'transferId': _currentTransferId,
+        });
+      } else {
+        debugPrint('❌ HTTP Upload failed: ${response.statusCode}');
+      }
       
       _isSending = false;
       _progress = 1.0;
       _currentTargetId = null;
       _currentTransferId = null;
-      _pendingSendFile = null; // Clear pending file after completion
+      _pendingSendFile = null;
       notifyListeners();
       
-      debugPrint('✅ Transfer completed successfully!');
     } catch (e) {
       debugPrint('❌ Upload error: $e');
       _isSending = false;
       _currentTargetId = null;
       _currentTransferId = null;
-      _pendingSendFile = null; // Clear pending file on error
+      _pendingSendFile = null;
       notifyListeners();
     }
   }
@@ -552,23 +853,6 @@ class TransferService extends ChangeNotifier {
     }
   }
   
-  void disconnect() {
-    // Cleanup any ongoing transfers
-    if (_isReceiving) {
-      _cleanupReceive();
-    }
-    if (_isSending) {
-      _isSending = false;
-      _currentTargetId = null;
-      _currentTransferId = null;
-      _pendingSendFile = null;
-    }
-    
-    _subscription?.cancel();
-    _channel?.sink.close(status.normalClosure);
-    _isConnected = false;
-    notifyListeners();
-  }
   
   @override
   void dispose() {

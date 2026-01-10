@@ -20,7 +20,7 @@ export const DeviceNameProvider = ({ children }) => {
     // Load device name from backend
     const loadDeviceName = useCallback(async () => {
         try {
-            const response = await api.get('/device/identity');
+            const response = await api.get('/device/identity', { timeout: 3000 }); // Shorter timeout for this call
             if (response.data?.deviceName) {
                 const name = response.data.deviceName;
                 setDeviceName(name);
@@ -28,7 +28,10 @@ export const DeviceNameProvider = ({ children }) => {
                 return name;
             }
         } catch (error) {
-            console.warn('Failed to load device name from backend:', error);
+            // Silently fail - we'll use localStorage fallback
+            if (error.code !== 'ECONNABORTED') {
+                console.warn('Failed to load device name from backend:', error.message);
+            }
         }
         
         // Fallback to localStorage or generate new name

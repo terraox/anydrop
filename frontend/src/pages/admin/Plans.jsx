@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Save, Check, Loader2, AlertCircle, Zap } from 'lucide-react';
 import { toast } from 'sonner';
+import api from '../../services/api';
 
 export default function Plans() {
     const [loading, setLoading] = useState(false);
@@ -8,22 +9,72 @@ export default function Plans() {
 
     // Free Tier Config
     const [freeMaxFileSize, setFreeMaxFileSize] = useState(100);
-    const [freeDailyLimit, setFreeDailyLimit] = useState(10);
+    const [freeDailyLimit, setFreeDailyLimit] = useState(3);
     const [freeStorageLimit, setFreeStorageLimit] = useState(1);
+    const [freePrice, setFreePrice] = useState(0);
 
     // Pro Tier Config
     const [proMaxFileSize, setProMaxFileSize] = useState(2048);
     const [proStorageLimit, setProStorageLimit] = useState(50);
     const [proPriorityProcessing, setProPriorityProcessing] = useState(true);
+    const [proDailyLimit, setProDailyLimit] = useState(-1);
+    const [proPrice, setProPrice] = useState(9.99);
+
+    const fetchConfigs = async () => {
+        try {
+            const res = await api.get('/admin/plans/config');
+            const free = res.data.free;
+            const pro = res.data.pro;
+            setFreeMaxFileSize(free.maxFileSizeMB || 100);
+            setFreeDailyLimit(free.dailyTransferLimit ?? 3);
+            setFreeStorageLimit(free.storageLimitGB || 1);
+            setFreePrice(free.monthlyPrice ?? 0);
+
+            setProMaxFileSize(pro.maxFileSizeMB || 2048);
+            setProDailyLimit(pro.dailyTransferLimit ?? -1);
+            setProStorageLimit(pro.storageLimitGB || 50);
+            setProPriorityProcessing(!!pro.priorityProcessing);
+            setProPrice(pro.monthlyPrice ?? 9.99);
+        } catch (e) {
+            console.error('Failed to load plan configs', e);
+            toast.error('Failed to load plan configs');
+        }
+    };
+
+    useEffect(() => {
+        fetchConfigs();
+    }, []);
 
     const handleSave = async () => {
         setLoading(true);
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setLoading(false);
-        setSaved(true);
-        toast.success("Configuration saved successfully!");
-        setTimeout(() => setSaved(false), 2000);
+        try {
+            await api.put('/admin/plans/config', {
+                planName: 'FREE',
+                maxFileSizeMB: freeMaxFileSize,
+                dailyTransferLimit: freeDailyLimit,
+                storageLimitGB: freeStorageLimit,
+                priorityProcessing: false,
+                monthlyPrice: freePrice,
+            }, { params: { planName: 'FREE' } });
+
+            await api.put('/admin/plans/config', {
+                planName: 'PRO',
+                maxFileSizeMB: proMaxFileSize,
+                dailyTransferLimit: proDailyLimit,
+                storageLimitGB: proStorageLimit,
+                priorityProcessing: proPriorityProcessing,
+                monthlyPrice: proPrice,
+            }, { params: { planName: 'PRO' } });
+
+            setSaved(true);
+            toast.success("Configuration saved successfully!");
+            setTimeout(() => setSaved(false), 2000);
+        } catch (e) {
+            console.error('Failed to save plan configs', e);
+            toast.error('Failed to save plan configs');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -65,6 +116,18 @@ export default function Plans() {
 
                     <div className="space-y-6">
                         <div className="space-y-2">
+                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Price (₹/month)</label>
+                            <input
+                                type="number"
+                                value={freePrice}
+                                onChange={(e) => setFreePrice(parseFloat(e.target.value) || 0)}
+                                min="0"
+                                step="0.01"
+                                className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 py-2.5 text-sm text-zinc-900 dark:text-white focus:border-violet-500 focus:outline-none shadow-sm"
+                            />
+                            <p className="text-xs text-zinc-500">Free plan price (should remain 0).</p>
+                        </div>
+                        <div className="space-y-2">
                             <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Max File Size (MB)</label>
                             <input
                                 type="number"
@@ -82,7 +145,7 @@ export default function Plans() {
                             <input
                                 type="number"
                                 value={freeDailyLimit}
-                                onChange={(e) => setFreeDailyLimit(parseInt(e.target.value) || 10)}
+                                onChange={(e) => setFreeDailyLimit(parseInt(e.target.value) || 3)}
                                 min="1"
                                 max="100"
                                 className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 py-2.5 text-sm text-zinc-900 dark:text-white focus:border-violet-500 focus:outline-none shadow-sm"
@@ -117,6 +180,18 @@ export default function Plans() {
 
                     <div className="space-y-6 relative z-10">
                         <div className="space-y-2">
+                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Price (₹/month)</label>
+                            <input
+                                type="number"
+                                value={proPrice}
+                                onChange={(e) => setProPrice(parseFloat(e.target.value) || 0)}
+                                min="0"
+                                step="0.01"
+                                className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 py-2.5 text-sm text-zinc-900 dark:text-white focus:border-amber-500 focus:outline-none shadow-sm"
+                            />
+                            <p className="text-xs text-zinc-500">Pro monthly subscription price.</p>
+                        </div>
+                        <div className="space-y-2">
                             <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Max File Size (MB)</label>
                             <input
                                 type="number"
@@ -132,12 +207,12 @@ export default function Plans() {
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Daily Transfer Limit</label>
                             <input
-                                type="text"
-                                disabled
-                                value="Unlimited"
-                                className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950/50 px-4 py-2.5 text-sm text-zinc-500 cursor-not-allowed shadow-sm"
+                                type="number"
+                                value={proDailyLimit}
+                                onChange={(e) => setProDailyLimit(parseInt(e.target.value) || -1)}
+                                className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 py-2.5 text-sm text-zinc-900 dark:text-white focus:border-amber-500 focus:outline-none shadow-sm"
                             />
-                            <p className="text-xs text-zinc-500">Pro users have unlimited daily transfers.</p>
+                            <p className="text-xs text-zinc-500">Set to -1 for unlimited daily transfers.</p>
                         </div>
 
                         <div className="space-y-2">

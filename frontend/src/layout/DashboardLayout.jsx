@@ -23,44 +23,57 @@ export default function DashboardLayout() {
 
   React.useEffect(() => {
     if (user) {
-      // Generate a unique device ID for this browser instance
-      let webDeviceId = localStorage.getItem('anydrop_web_device_id');
-      if (!webDeviceId) {
-        webDeviceId = `web-${crypto.randomUUID()}`;
-        localStorage.setItem('anydrop_web_device_id', webDeviceId);
+      // DISABLED: Do not use TransferService on /receive page
+      // The /receive page uses LocalTransferWebSocketService instead
+      // TransferService connects to /transfer which doesn't exist for local file transfer
+      const isReceivePage = location.pathname === '/receive';
+      
+      if (!isReceivePage) {
+        // Generate a unique device ID for this browser instance
+        let webDeviceId = localStorage.getItem('anydrop_web_device_id');
+        if (!webDeviceId) {
+          webDeviceId = `web-${crypto.randomUUID()}`;
+          localStorage.setItem('anydrop_web_device_id', webDeviceId);
+        }
+
+        // DISABLED: TransferService uses /transfer path which is removed
+        // For local file transfer, use LocalTransferWebSocketService with /ws path
+        // TransferService.connect(webDeviceId);
+        console.log('⚠️ TransferService disabled - use LocalTransferWebSocketService for local file transfer');
       }
 
-      // Connect to unified transfer endpoint (for sending files to mobile)
-      TransferService.connect(webDeviceId);
-
-      // Connect to STOMP for other features
+      // Connect to STOMP for other features (not for local file transfer)
       WebSocketService.connect(() => {
         // Register this browser instance with the device name from context
         WebSocketService.registerDevice({ name: deviceName || (user.username ? `${user.username}'s Browser` : 'Web Client') });
 
-        // Subscribe to incoming transfers (from mobile to web)
-        WebSocketService.subscribe('/user/queue/transfers', (data) => {
-          console.log("📥 Incoming Transfer:", data);
+        // Subscribe to incoming transfers (from mobile to web) - legacy feature
+        // For local file transfer, use LocalTransferWebSocketService on /receive page
+        if (!isReceivePage) {
+          WebSocketService.subscribe('/user/queue/transfers', (data) => {
+            console.log("📥 Incoming Transfer:", data);
 
-          toast.message(`Incoming File: ${data.filename}`, {
-            description: `From: ${data.sender}`,
-            action: {
-              label: 'Download',
-              onClick: () => {
-                window.open(data.downloadUrl, '_blank');
+            toast.message(`Incoming File: ${data.filename}`, {
+              description: `From: ${data.sender}`,
+              action: {
+                label: 'Download',
+                onClick: () => {
+                  window.open(data.downloadUrl, '_blank');
+                },
               },
-            },
-            duration: Infinity, // Stay until clicked or dismissed
+              duration: Infinity, // Stay until clicked or dismissed
+            });
           });
-        });
+        }
       });
     }
 
     return () => {
       WebSocketService.disconnect();
-      TransferService.disconnect();
+      // Only disconnect TransferService if it was connected
+      // TransferService.disconnect();
     };
-  }, [user, deviceName]);
+  }, [user, deviceName, location.pathname]);
   return (
     <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans selection:bg-violet-500/30 relative">
       {/* Global Background Grid */}

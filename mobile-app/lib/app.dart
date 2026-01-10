@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'providers/auth_provider.dart';
-import 'providers/device_provider.dart';
-import 'providers/theme_provider.dart';
-import 'services/transfer_service.dart';
-import 'screens/auth/login_screen.dart';
-import 'screens/receive/receive_hub.dart';
-import 'screens/send/send_hub.dart';
-import 'screens/settings/settings_screen.dart';
-import 'screens/trackpad/trackpad_screen.dart';
-import 'widgets/bottom_nav_bar.dart';
+import 'package:anydrop/providers/auth_provider.dart';
+import 'package:anydrop/providers/device_provider.dart';
+import 'package:anydrop/providers/theme_provider.dart';
+import 'package:anydrop/services/transfer_service.dart';
+import 'package:anydrop/services/http_server_service.dart';
+import 'package:anydrop/screens/auth/login_screen.dart';
+import 'package:anydrop/screens/receive/receive_hub.dart';
+import 'package:anydrop/screens/send/send_hub.dart';
+import 'package:anydrop/screens/settings/settings_screen.dart';
+import 'package:anydrop/screens/trackpad/trackpad_screen.dart';
+import 'package:anydrop/widgets/bottom_nav_bar.dart';
 
 /// Main App widget
 class AnyDropApp extends StatelessWidget {
@@ -22,8 +23,15 @@ class AnyDropApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => DeviceProvider()),
-        ChangeNotifierProvider(create: (_) => TransferService()),
+        Provider(create: (_) => HttpServerService()),
+        ChangeNotifierProxyProvider<HttpServerService, DeviceProvider>(
+          create: (context) => DeviceProvider(context.read<HttpServerService>()),
+          update: (_, httpServer, deviceProvider) => deviceProvider ?? DeviceProvider(httpServer),
+        ),
+        ChangeNotifierProxyProvider<HttpServerService, TransferService>(
+          create: (context) => TransferService(context.read<HttpServerService>()),
+          update: (_, httpServer, transferService) => transferService ?? TransferService(httpServer),
+        ),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
@@ -139,14 +147,20 @@ class _MainScreenState extends State<MainScreen> {
       // Wait for deviceProvider to initialize and get IP
       await Future.delayed(const Duration(milliseconds: 1000));
       
-      // Use persistent UUID for all registrations to ensure consistency
+      // IMPORTANT: For local file transfer, receiver should NOT create WebSocket clients
+      // Receiver only hosts HTTP server - files are received via HTTP POST /upload
+      // WebSocket is only for senders connecting to receivers (signaling)
       final deviceId = deviceProvider.deviceId;
-      debugPrint('📡 Registering to transfer with deviceId: $deviceId');
-      transferService.connect(deviceId);
+      debugPrint('📡 Device ID: $deviceId');
+      debugPrint('⚠️ Receiver mode: HTTP server only, no WebSocket client needed');
       
-      if (authProvider.token != null) {
-        deviceProvider.connectToServer(token: authProvider.token);
-      }
+      // DISABLED - Receiver should not connect to WebSocket
+      // transferService.connect(deviceId);
+      
+      // DISABLED - Receiver should not connect to server WebSocket
+      // if (authProvider.token != null) {
+      //   deviceProvider.connectToServer(token: authProvider.token);
+      // }
       
       // Listen for incoming transfers (both old and new service)
       deviceProvider.addListener(_checkIncomingTransfer);

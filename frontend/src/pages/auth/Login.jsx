@@ -28,7 +28,7 @@ export default function Login() {
       console.log('📡 API Base URL:', api.defaults.baseURL);
       console.log('🌐 Current Origin:', window.location.origin);
       console.log('🔗 Full URL:', window.location.href);
-      
+
       const response = await api.post('/auth/login', { email, password });
       console.log('✅ Login response received:', response.status);
 
@@ -61,18 +61,15 @@ export default function Login() {
           alert("DEBUG: Context update failed: " + e.message);
         }
 
-        // 2. Redirect based on role
-        if (role === 'ADMIN') {
-          navigate('/admin');
-        } else {
-          navigate('/'); // User Dashboard (Orbit)
-        }
+        // 2. Redirect all users to User Dashboard (Orbit)
+        // This ensures admins can access the user portal when logging in from the main page.
+        navigate('/');
       } else {
         setError("Invalid response from server.");
       }
     } catch (err) {
       console.error('Login error:', err);
-      
+
       if (err.response) {
         // Server responded with error
         if (err.response.status === 401) {
@@ -82,9 +79,9 @@ export default function Login() {
         } else if (err.response.status === 500) {
           setError("Server error. Please try again later.");
         } else {
-          const errorMessage = err.response.data?.message || 
-                             (typeof err.response.data === 'string' ? err.response.data : null) ||
-                             `Server Error: ${err.response.status}`;
+          const errorMessage = err.response.data?.message ||
+            (typeof err.response.data === 'string' ? err.response.data : null) ||
+            `Server Error: ${err.response.status}`;
           setError(errorMessage);
         }
       } else if (err.request) {

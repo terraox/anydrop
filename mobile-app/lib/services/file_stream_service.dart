@@ -16,9 +16,40 @@ class FileStreamService {
   Function(String)? onError;
   
   /// Start Sending a File
-  Future<void> sendFile(String transferId, File file) async {
+  /// DEPRECATED: This uses WebSocket for file transfer. Use HTTP streaming instead.
+  /// File transfers should use HTTP POST /upload with discovered device IP.
+  /// 
+  /// DISABLED: This method is completely disabled - do not use WebSocket for file transfer.
+  /// Use TransferService.sendFile() which uses HTTP POST /upload instead.
+  @Deprecated('Use TransferService.sendFile() with HTTP POST /upload instead. WebSocket file transfer is disabled.')
+  Future<void> sendFile(String transferId, File file, {String? deviceIp, int? devicePort}) async {
+    // COMPLETELY DISABLED - Do not create WebSocket connections for file transfer
+    debugPrint('❌ ERROR: WebSocket file transfer is disabled.');
+    debugPrint('   Use TransferService.sendFile() which uses HTTP POST /upload instead.');
+    if (onError != null) {
+      onError!('WebSocket file transfer is disabled. Use HTTP POST /upload via TransferService.sendFile()');
+    }
+    return;
+    
+    /* DISABLED - Do not use WebSocket for file transfer
     try {
-      final wsUrl = ApiConstants.baseUrl.replaceFirst('http', 'ws') + '/stream';
+      // IMPORTANT: File transfers should use HTTP, not WebSocket
+      // This method is kept for backward compatibility but should not be used
+      debugPrint('⚠️ WARNING: Using WebSocket for file transfer is deprecated.');
+      debugPrint('   Use HTTP POST /upload with discovered device IP instead.');
+      
+      String wsUrl;
+      if (deviceIp != null && devicePort != null) {
+        // Use discovered device IP
+        wsUrl = 'ws://$deviceIp:$devicePort/stream';
+      } else {
+        // Fallback (deprecated)
+        wsUrl = ApiConstants.baseUrl.replaceFirst('http', 'ws') + '/stream';
+        debugPrint('❌ ERROR: No device IP provided. File transfer will fail.');
+        if (onError != null) onError!('Device IP required for file transfer');
+        return;
+      }
+      
       _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
       
       // 1. Handshake (SENDER role)
@@ -62,12 +93,42 @@ class FileStreamService {
     } catch (e) {
       if (onError != null) onError!(e.toString());
     }
+    */
   }
 
   /// Start Receiving a File
-  Future<void> receiveFile(String transferId, String fileName, int fileSize) async {
+  /// DEPRECATED: This uses WebSocket for file transfer. Use HTTP streaming instead.
+  /// File transfers should use HTTP POST /upload with discovered device IP.
+  /// 
+  /// DISABLED: This method is completely disabled - receiver does not create WebSocket connections.
+  /// Receiver only hosts HTTP server - files are received via HTTP POST /upload.
+  @Deprecated('Receiver does not create WebSocket connections. Files are received via HTTP POST /upload.')
+  Future<void> receiveFile(String transferId, String fileName, int fileSize, {String? deviceIp, int? devicePort}) async {
+    // COMPLETELY DISABLED - Receiver does not create WebSocket connections
+    debugPrint('❌ ERROR: Receiver does not create WebSocket connections.');
+    debugPrint('   Receiver only hosts HTTP server - files are received via HTTP POST /upload.');
+    if (onError != null) {
+      onError!('Receiver does not create WebSocket connections. Files are received via HTTP POST /upload.');
+    }
+    return;
+    
+    /* DISABLED - Receiver does not create WebSocket connections
     try {
-      final wsUrl = ApiConstants.baseUrl.replaceFirst('http', 'ws') + '/stream';
+      // IMPORTANT: File transfers should use HTTP, not WebSocket
+      debugPrint('⚠️ WARNING: Using WebSocket for file transfer is deprecated.');
+      
+      String wsUrl;
+      if (deviceIp != null && devicePort != null) {
+        // Use discovered device IP
+        wsUrl = 'ws://$deviceIp:$devicePort/stream';
+      } else {
+        // Fallback (deprecated)
+        wsUrl = ApiConstants.baseUrl.replaceFirst('http', 'ws') + '/stream';
+        debugPrint('❌ ERROR: No device IP provided. File transfer will fail.');
+        if (onError != null) onError!('Device IP required for file transfer');
+        return;
+      }
+      
       _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
       
       // 1. Handshake (RECEIVER role)
@@ -112,9 +173,6 @@ class FileStreamService {
             fileSink?.close();
             _channel!.sink.close(status.normalClosure);
             if (onComplete != null) onComplete!(tempFile!.path);
-            
-            // Open it?
-            // OpenFile.open(tempFile.path);
           }
         }
       }, onError: (e) {
@@ -128,6 +186,7 @@ class FileStreamService {
     } catch (e) {
       if (onError != null) onError!(e.toString());
     }
+    */
   }
 
   void cancel() {

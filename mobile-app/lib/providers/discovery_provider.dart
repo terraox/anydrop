@@ -90,9 +90,16 @@ class DiscoveryProvider extends ChangeNotifier {
 
   void _handleMdnsUpdate(nsd.Service service, nsd.ServiceStatus status) {
     if (status == nsd.ServiceStatus.found) {
+      // Always process found events - this handles both new devices and updates
       _addMdnsDevice(service);
     } else if (status == nsd.ServiceStatus.lost) {
-      _removeDevice(service.name ?? '');
+      // Remove by IP address to match the add logic
+      if (service.host != null) {
+        _removeDeviceByIp(service.host!);
+      } else {
+        // Fallback to name if IP is not available
+        _removeDevice(service.name ?? '');
+      }
     }
   }
 
@@ -126,17 +133,34 @@ class DiscoveryProvider extends ChangeNotifier {
   void _addDeviceIfNew(DiscoveredDevice device) {
     final existingIndex = _devices.indexWhere((d) => d.ip == device.ip);
     if (existingIndex >= 0) {
-      _devices[existingIndex] = device;
+      final existing = _devices[existingIndex];
+      // Update if name or other properties changed
+      if (existing.name != device.name || 
+          existing.icon != device.icon || 
+          existing.port != device.port ||
+          existing.type != device.type) {
+        _devices[existingIndex] = device;
+        debugPrint('🔄 Device updated: ${device.name} @ ${device.ip}:${device.port}');
+        notifyListeners();
+      }
     } else {
       _devices.add(device);
+      debugPrint('✅ Device found: ${device.name} @ ${device.ip}:${device.port}');
+      notifyListeners();
     }
-    debugPrint('✅ Device found: ${device.name} @ ${device.ip}:${device.port}');
-    notifyListeners();
   }
 
   void _removeDevice(String id) {
     _devices.removeWhere((d) => d.id == id);
     notifyListeners();
+  }
+
+  void _removeDeviceByIp(String ip) {
+    final initialCount = _devices.length;
+    _devices.removeWhere((d) => d.ip == ip);
+    if (_devices.length < initialCount) {
+      notifyListeners();
+    }
   }
 
   Future<void> _startSubnetScan() async {

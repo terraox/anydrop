@@ -32,7 +32,11 @@ class _TrackpadScreenState extends State<TrackpadScreen>
   @override
   void initState() {
     super.initState();
-    _wsService.connect();
+    // NOTE: Trackpad uses WebSocketService (STOMP) for main server connection
+    // This is NOT used for local file transfer
+    // For local file transfer, use TransferService.connectToReceiver() with discovered IP
+    // Trackpad requires device IP/port - do not use without parameters
+    // _wsService.connect(); // DISABLED - requires deviceIp and devicePort
   }
 
   @override

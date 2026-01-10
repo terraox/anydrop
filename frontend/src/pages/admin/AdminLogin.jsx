@@ -40,6 +40,8 @@ export default function AdminLogin() {
         // --------------------------------------
 
         try {
+            console.log('🔐 Attempting admin login for:', email);
+            console.log('🔗 API base URL:', api.defaults.baseURL);
             const response = await api.post('/auth/login', { email, password });
 
             if (response.status === 200 && response.data.token) {
@@ -58,12 +60,24 @@ export default function AdminLogin() {
                 setError("Invalid response from server.");
             }
         } catch (err) {
-            if (err.response && err.response.status === 403) {
-                setError(err.response.data || "Your account has been suspended.");
-            } else if (err.response && err.response.status === 401) {
-                setError("Invalid credentials. Please verify your email and password.");
+            console.error('Admin login error:', err);
+            if (err.response) {
+                // Server responded with error
+                if (err.response.status === 403) {
+                    setError(err.response.data || "Your account has been suspended.");
+                } else if (err.response.status === 401) {
+                    setError("Invalid credentials. Please verify your email and password.");
+                } else {
+                    setError(`Server error: ${err.response.status}. ${err.response.data?.message || ''}`);
+                }
+            } else if (err.request) {
+                // Request was made but no response received
+                console.error('No response from server:', err.message);
+                setError("Connection failed. Please ensure the backend is running on port 8080.");
             } else {
-                setError("Connection failed. Please check your network and try again.");
+                // Error setting up the request
+                console.error('Request setup error:', err.message);
+                setError(`Connection error: ${err.message || 'Please check your network and try again.'}`);
             }
         } finally {
             setLoading(false);

@@ -87,7 +87,7 @@ class _SendHubState extends State<SendHub> {
         
         // Use the transfer service for P2P
         await transferService.sendFile(
-          device.id,
+          device,
           File(file.path!),
           transferId,
         );

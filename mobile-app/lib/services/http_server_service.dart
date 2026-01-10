@@ -13,6 +13,9 @@ class HttpServerService {
 
   bool get isRunning => _isRunning;
 
+  /// Callback for incoming file transfers
+  Future<shelf.Response> Function(shelf.Request)? onFileTransfer;
+
   /// Start the HTTP server on port 8080
   Future<void> startServer({
     required String deviceName,
@@ -22,11 +25,11 @@ class HttpServerService {
     if (_isRunning) return;
 
     try {
-      // Create a handler that responds to /api/identify
+      // Create a handler that responds to /api/identify and /api/files/transfer
       final handler = const shelf.Pipeline()
           .addMiddleware(shelf.logRequests())
           .addMiddleware(_corsMiddleware())
-          .addHandler((request) {
+          .addHandler((request) async {
         if (request.url.path == 'api/identify') {
           // Return device identity including the deviceId for transfer routing
           final response = {
@@ -43,6 +46,22 @@ class HttpServerService {
             jsonEncode(response),
             headers: {'Content-Type': 'application/json'},
           );
+        }
+
+        // Handle file upload (receiver receives files via HTTP POST /upload)
+        if (request.url.path == 'upload' && request.method == 'POST') {
+          if (onFileTransfer != null) {
+            return await onFileTransfer!(request);
+          }
+          return shelf.Response.internalServerError(body: 'No transfer handler registered');
+        }
+        
+        // Legacy endpoint for compatibility
+        if (request.url.path == 'api/files/transfer' && request.method == 'POST') {
+          if (onFileTransfer != null) {
+            return await onFileTransfer!(request);
+          }
+          return shelf.Response.internalServerError(body: 'No transfer handler registered');
         }
 
         // 404 for other paths

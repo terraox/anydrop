@@ -4,6 +4,7 @@ import { Upload, File, X, Wifi, Plus, Laptop, Smartphone, Search, Zap, Activity,
 import { toast } from 'sonner';
 import FileService from '../../services/file.service';
 import TransferService from '../../services/transfer.service';
+import WebSocketService from '../../services/websocket.service';
 import discoveryService from '../../services/discovery.service';
 import Logo from '../../components/ui/Logo';
 import GlassCard from '../../components/ui/GlassCard';
@@ -18,9 +19,6 @@ import { useAuth } from '../../context/AuthContext';
 export default function BentoOrbit() {
     const [files, setFiles] = useState([]);
     const { playUploadStart, playUploadSuccess, playUploadError } = useSoundEffects();
-    const { user, isAuthenticated } = useAuth();
-    const isPro = user?.plan === 'PRO' || user?.plan === 'TITAN';
-    const [upgradePrompt, setUpgradePrompt] = useState(null);
     const { user, isAuthenticated } = useAuth();
     const isPro = user?.plan === 'PRO' || user?.plan === 'TITAN';
     const [upgradePrompt, setUpgradePrompt] = useState(null);
@@ -55,9 +53,10 @@ export default function BentoOrbit() {
     React.useEffect(() => {
         document.title = "AnyDrop";
 
-        // Connect TransferService with device name from context
-        if (deviceName) {
-            TransferService.connect(deviceName);
+        // Connect TransferService using a stable id (prefer email)
+        const deviceId = user?.email || deviceName;
+        if (deviceId) {
+            TransferService.connect(deviceId);
         }
 
         // Subscribe to LAN devices
@@ -100,10 +99,23 @@ export default function BentoOrbit() {
             toast.warning(msg, { duration: 6000 });
         };
 
-        TransferService.onUpgradeRequired = (message) => {
-            const msg = message?.message || 'Free plan limit reached (3 transfers). Please upgrade to Pro.';
-            setUpgradePrompt(msg);
-            toast.warning(msg, { duration: 6000 });
+        // STOMP subscription to ensure incoming transfer popups
+        WebSocketService.connect(() => {
+            WebSocketService.subscribe('/user/queue/transfers', (request) => {
+                setIncomingTransfer({
+                    transferId: request.transferId,
+                    fileName: request.filename || request.fileName,
+                    size: request.size,
+                    senderId: request.sender,
+                    sender: request.sender || 'Unknown Device',
+                    fileType: request.fileType || 'application/octet-stream'
+                });
+            });
+        });
+
+        // Subscribe to LAN devices (other servers)
+        const handleLanUpdate = (devices) => {
+            setLanDevices(devices);
         };
 
         discoveryService.addListener(handleLanUpdate);
@@ -111,9 +123,10 @@ export default function BentoOrbit() {
 
         return () => {
             TransferService.disconnect();
+            WebSocketService.disconnect();
             discoveryService.removeListener(handleLanUpdate);
         };
-    }, []);
+    }, [user?.email, deviceName]);
 
     // Transfer Request State
     const [incomingTransfer, setIncomingTransfer] = useState(null);

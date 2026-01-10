@@ -26,20 +26,41 @@ export default function Register() {
         setError(null);
 
         try {
-            const response = await api.post('/auth/register', formData);
+            console.log('📝 Registering user with data:', formData);
+            // Backend expects: username, email (password will be auto-generated)
+            // Frontend form has: name, email, company, phone
+            const registrationData = {
+                username: formData.name || formData.email.split('@')[0], // Use name or email prefix as username
+                email: formData.email
+                // No password - backend will generate access key
+            };
+            
+            console.log('📤 Sending registration request to /auth/signup:', registrationData);
+            const response = await api.post('/auth/signup', registrationData);
 
             if (response.status === 200 || response.status === 201) {
                 setSuccess(true);
                 // After a brief delay, redirect to login
                 setTimeout(() => {
                     navigate('/login');
-                }, 3000);
+                }, 5000); // Give user time to read the success message
             }
         } catch (err) {
-            if (err.response?.data?.message) {
-                setError(err.response.data.message);
-            } else if (err.response?.data) {
-                setError(typeof err.response.data === 'string' ? err.response.data : 'Registration failed.');
+            console.error('❌ Registration error:', err);
+            if (err.response) {
+                // Server responded with error
+                if (err.response.status === 400) {
+                    setError('Email already exists or invalid data. Please try a different email.');
+                } else if (err.response.data?.message) {
+                    setError(err.response.data.message);
+                } else if (err.response.data) {
+                    setError(typeof err.response.data === 'string' ? err.response.data : 'Registration failed.');
+                } else {
+                    setError(`Registration failed: ${err.response.status}`);
+                }
+            } else if (err.request) {
+                // Request was made but no response received
+                setError('Connection failed. Please ensure the backend is running on port 8080.');
             } else {
                 setError('Registration failed. Please try again later.');
             }
@@ -52,8 +73,8 @@ export default function Register() {
     if (success) {
         return (
             <AuthLayout
-                title="Request Submitted!"
-                subtitle="We'll review your application and send credentials to your email."
+                title="Registration Successful!"
+                subtitle="Your access key has been sent to your email."
             >
                 <div className="text-center space-y-6 py-4">
                     <div className="mx-auto w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center ring-1 ring-emerald-500/20 animate-pulse">
@@ -62,10 +83,10 @@ export default function Register() {
 
                     <div className="space-y-2">
                         <p className="text-sm font-medium text-zinc-900 dark:text-white">
-                            Check your inbox soon.
+                            Check your email for your access key.
                         </p>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                            You will be redirected to the login page shortly...
+                            Use the access key as your password when logging in. You will be redirected to the login page shortly...
                         </p>
                     </div>
 

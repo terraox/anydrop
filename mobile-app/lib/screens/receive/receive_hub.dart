@@ -103,7 +103,7 @@ class _ReceiveHubState extends State<ReceiveHub> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              deviceProvider.isConnected ? 'Online' : 'Offline',
+                              deviceProvider.isConnected ? 'Ready to Receive' : 'Connecting to transfer service...',
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,

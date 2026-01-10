@@ -1,68 +1,274 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wifi, File, Download, X, Laptop, Shield } from 'lucide-react';
+import { Wifi, Laptop, Shield } from 'lucide-react';
 import { toast } from 'sonner';
-import WebSocketService from '../../services/websocket.service';
 import { useDeviceName } from '../../context/DeviceNameContext';
 import GlassCard from '../../components/ui/GlassCard';
+import IncomingFileCard from '../../components/receive/IncomingFileCard';
+import LocalTransferWebSocketService from '../../services/localTransferWebSocket.service';
+import { getBackendPort } from '../../utils/backendConfig';
 
+/**
+ * Receive Page - AirDrop-style incoming file receiver
+ * 
+ * Features:
+ * - Shows incoming file cards with progress
+ * - Handles multiple files in a queue
+ * - Mobile browser download support
+ * - Electron auto-save support (optional)
+ */
 export default function Receive() {
-    const [incomingTransfer, setIncomingTransfer] = useState(null);
-    const [isViable, setIsViable] = useState(true);
+    const [incomingFiles, setIncomingFiles] = useState([]);
+    const [isConnected, setIsConnected] = useState(false);
     const { deviceName } = useDeviceName();
 
-    React.useEffect(() => {
+    // NOTE: Receiver UI should NOT connect to WebSocket
+    // The backend hosts the WebSocket server and broadcasts FILE_METADATA and PROGRESS
+    // For now, we'll use HTTP polling or Server-Sent Events instead
+    // OR: The receiver UI can connect to its own backend's WebSocket (localhost is OK for same-machine)
+    
+    // Get receiver IP - for receiver UI on same machine as backend, use localhost
+    // This is the ONLY case where localhost is acceptable (receiver UI to its own backend)
+    const getReceiverIp = () => {
+        // Receiver UI connects to its own backend (same machine)
+        // This is acceptable because it's the receiver connecting to itself
+        // For discovered devices, use discovered IP from mDNS
+        return 'localhost';
+    };
+
+    // Connect to receiver's WebSocket server (receiver UI to its own backend)
+    useEffect(() => {
         document.title = "Receive - AnyDrop";
 
-        // Connect WebSocket
-        WebSocketService.connect(() => {
-            // Register this device with name from context
-            WebSocketService.registerDevice({ name: deviceName || 'This Device' });
+        // IMPORTANT: Receiver UI connects to its own backend's WebSocket server
+        // This is the ONLY WebSocket connection the receiver UI makes
+        // It connects to localhost because the backend is on the same machine
+        const receiverIp = getReceiverIp();
+        const receiverPort = getBackendPort();
 
-            WebSocketService.subscribe('/user/queue/transfers', (request) => {
-                setIncomingTransfer(request);
+        console.log('🔌 Receiver UI connecting to its own backend WebSocket:', `ws://${receiverIp}:${receiverPort}/ws`);
+        console.log('   ✅ This is the ONLY WebSocket connection for receiver UI');
+        console.log('   ✅ Uses /ws path (not /transfer)');
+        console.log('   ✅ localhost is OK here (receiver UI to its own backend)');
+        
+        LocalTransferWebSocketService.connect(receiverIp, receiverPort);
+
+        // Listen for connection events
+        const handleConnected = () => {
+            console.log('✅ Connected to receiver WebSocket');
+            setIsConnected(true);
+        };
+
+        const handleDisconnected = () => {
+            console.log('🔌 Disconnected from receiver WebSocket');
+            setIsConnected(false);
+        };
+
+        const handleReady = (data) => {
+            console.log('✅ READY handshake received');
+            setIsConnected(true);
+        };
+
+        // Listen for FILE_METADATA (incoming file announcement)
+        const handleFileMetadata = (data) => {
+            console.log('📥 FILE_METADATA received:', data);
+            
+            const files = data.files || [];
+            const newFiles = files.map((file, index) => ({
+                transferId: data.transferId,
+                name: file.name,
+                size: file.size,
+                senderId: data.senderId,
+                senderName: data.senderName || data.senderId || 'Unknown Device',
+                status: 'waiting', // waiting, receiving, completed, failed
+                progress: 0,
+                receivedBytes: 0,
+                totalBytes: file.size,
+                speed: 0,
+                downloadUrl: null,
+                savedPath: null,
+                error: null
+            }));
+
+            setIncomingFiles(prev => {
+                // Add new files, avoiding duplicates by transferId + name
+                const existing = new Set(prev.map(f => `${f.transferId}-${f.name}`));
+                const unique = newFiles.filter(f => !existing.has(`${f.transferId}-${f.name}`));
+                return [...prev, ...unique];
             });
-        });
 
-        return () => WebSocketService.disconnect();
+            toast.info(`${files.length} file(s) incoming from ${data.senderName || 'Unknown Device'}`);
+        };
+
+        // Listen for PROGRESS updates
+        const handleProgress = (data) => {
+            console.log('📊 PROGRESS update:', data);
+            
+            setIncomingFiles(prev => prev.map(file => {
+                if (file.transferId === data.transferId && file.name === data.file) {
+                    const speed = data.speed || 0;
+                    return {
+                        ...file,
+                        status: 'receiving',
+                        progress: data.percentage || ((data.receivedBytes / data.totalBytes) * 100),
+                        receivedBytes: data.receivedBytes,
+                        totalBytes: data.totalBytes,
+                        speed: speed
+                    };
+                }
+                return file;
+            }));
+        };
+
+        // Listen for TRANSFER_COMPLETE
+        const handleTransferComplete = (data) => {
+            console.log('✅ TRANSFER_COMPLETE:', data);
+            
+            setIncomingFiles(prev => prev.map(file => {
+                if (file.transferId === data.transferId && file.name === data.file) {
+                    return {
+                        ...file,
+                        status: 'completed',
+                        progress: 100,
+                        receivedBytes: data.size,
+                        totalBytes: data.size,
+                        downloadUrl: data.downloadUrl,
+                        savedAs: data.savedAs
+                    };
+                }
+                return file;
+            }));
+
+            toast.success(`File received: ${data.file}`);
+        };
+
+        // Listen for TRANSFER_ERROR
+        const handleTransferError = (data) => {
+            console.error('❌ TRANSFER_ERROR:', data);
+            
+            setIncomingFiles(prev => prev.map(file => {
+                if (file.transferId === data.transferId && file.name === data.file) {
+                    return {
+                        ...file,
+                        status: 'failed',
+                        error: data.error || 'Transfer failed'
+                    };
+                }
+                return file;
+            }));
+
+            toast.error(`Transfer failed: ${data.error || 'Unknown error'}`);
+        };
+
+        // Register event listeners
+        LocalTransferWebSocketService.on('connected', handleConnected);
+        LocalTransferWebSocketService.on('disconnected', handleDisconnected);
+        LocalTransferWebSocketService.on('ready', handleReady);
+        LocalTransferWebSocketService.on('fileMetadata', handleFileMetadata);
+        LocalTransferWebSocketService.on('progress', handleProgress);
+        LocalTransferWebSocketService.on('transferComplete', handleTransferComplete);
+        LocalTransferWebSocketService.on('error', handleTransferError);
+
+        // Cleanup on unmount
+        return () => {
+            LocalTransferWebSocketService.off('connected', handleConnected);
+            LocalTransferWebSocketService.off('disconnected', handleDisconnected);
+            LocalTransferWebSocketService.off('ready', handleReady);
+            LocalTransferWebSocketService.off('fileMetadata', handleFileMetadata);
+            LocalTransferWebSocketService.off('progress', handleProgress);
+            LocalTransferWebSocketService.off('transferComplete', handleTransferComplete);
+            LocalTransferWebSocketService.off('error', handleTransferError);
+            LocalTransferWebSocketService.disconnect();
+        };
     }, [deviceName]);
 
-    const handleAcceptTransfer = () => {
-        if (incomingTransfer?.downloadUrl) {
-            const link = document.createElement('a');
-            link.href = incomingTransfer.downloadUrl;
-            link.download = incomingTransfer.filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            toast.success(`Downloading ${incomingTransfer.filename}...`);
-        }
-        setIncomingTransfer(null);
-    };
+    // Handle file acceptance
+    const handleAcceptFile = useCallback((file) => {
+        console.log('✅ Accepting file:', file.name);
+        
+        // Send ACCEPT message via WebSocket (if needed)
+        // For now, backend auto-accepts, so we just update UI
+        setIncomingFiles(prev => prev.map(f => 
+            f.transferId === file.transferId && f.name === file.name
+                ? { ...f, status: 'receiving' }
+                : f
+        ));
+    }, []);
 
-    const handleRejectTransfer = () => {
-        setIncomingTransfer(null);
-        toast.info("Transfer rejected");
-    };
+    // Handle file rejection
+    const handleRejectFile = useCallback((file) => {
+        console.log('❌ Rejecting file:', file.name);
+        
+        // Send REJECT message via WebSocket
+        LocalTransferWebSocketService.send({
+            type: 'REJECT',
+            transferId: file.transferId
+        });
+
+        // Remove from queue
+        setIncomingFiles(prev => prev.filter(f => 
+            !(f.transferId === file.transferId && f.name === file.name)
+        ));
+
+        toast.info(`Rejected: ${file.name}`);
+    }, []);
+
+    // Handle file download (mobile browsers)
+    const handleDownloadFile = useCallback((file) => {
+        if (!file.downloadUrl) {
+            toast.error('Download URL not available');
+            return;
+        }
+
+        const backendPort = getBackendPort();
+        const downloadUrl = `http://localhost:${backendPort}${file.downloadUrl}`;
+        
+        console.log('📥 Downloading file:', downloadUrl);
+        
+        // Trigger download via user action (required for mobile browsers)
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = file.name;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        toast.success(`Downloading ${file.name}...`);
+    }, []);
+
+    // Clean up completed files after 5 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setIncomingFiles(prev => prev.filter(file => {
+                // Keep files that are not completed or failed, or completed less than 5 seconds ago
+                if (file.status === 'completed' || file.status === 'failed') {
+                    const completedTime = file.completedAt || Date.now();
+                    return Date.now() - completedTime < 5000;
+                }
+                return true;
+            }));
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, []);
 
     return (
         <div className="p-6 h-full w-full flex flex-col items-center justify-center relative overflow-hidden">
-
             {/* Background Pulse */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none -z-10">
-                <div className={`w-[500px] h-[500px] rounded-full bg-violet-500/5 ${isViable ? 'animate-ping' : ''}`} />
+                <div className={`w-[500px] h-[500px] rounded-full bg-violet-500/5 ${isConnected ? 'animate-ping' : ''}`} />
                 <div className="absolute w-[800px] h-[800px] rounded-full border border-violet-500/10" />
             </div>
 
-            <div className="max-w-2xl w-full z-10 flex flex-col items-center gap-8">
-
+            <div className="max-w-4xl w-full z-10 flex flex-col items-center gap-8">
                 {/* Status Indicator */}
                 <div className="flex flex-col items-center gap-4">
                     <div className="relative">
                         <div className="w-24 h-24 rounded-full bg-white dark:bg-zinc-900 border-4 border-zinc-100 dark:border-zinc-800 flex items-center justify-center shadow-2xl">
-                            <Wifi className={`w-10 h-10 ${isViable ? 'text-violet-500 animate-pulse' : 'text-zinc-400'}`} />
+                            <Wifi className={`w-10 h-10 ${isConnected ? 'text-violet-500 animate-pulse' : 'text-zinc-400'}`} />
                         </div>
-                        {isViable && (
+                        {isConnected && (
                             <span className="absolute -top-1 -right-1 flex h-4 w-4">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500"></span>
@@ -75,6 +281,11 @@ export default function Receive() {
                         <p className="text-zinc-500 dark:text-zinc-400 max-w-md mx-auto">
                             Your device is visible to other devices on your AnyDrop network. Files sent to you will appear here.
                         </p>
+                        {!isConnected && (
+                            <p className="text-xs text-amber-500 dark:text-amber-400 mt-2">
+                                ⚠️ Connecting to transfer service...
+                            </p>
+                        )}
                     </div>
 
                     <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700">
@@ -85,63 +296,33 @@ export default function Receive() {
                     </div>
                 </div>
 
-                {/* Incoming Request Card */}
-                <AnimatePresence>
-                    {incomingTransfer ? (
-                        <motion.div
-                            initial={{ opacity: 0, y: 50, scale: 0.9 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: 50, scale: 0.9 }}
-                            className="w-full"
-                        >
-                            <GlassCard className="p-8 border-violet-500/30 ring-4 ring-violet-500/10">
-                                <div className="flex flex-col md:flex-row items-center gap-6">
-                                    <div className="h-20 w-20 rounded-2xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
-                                        <File className="w-10 h-10 text-violet-600 dark:text-violet-400" />
-                                    </div>
-
-                                    <div className="flex-1 text-center md:text-left">
-                                        <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-1">Incoming Transfer</h3>
-                                        <p className="text-lg font-medium text-violet-600 dark:text-violet-400 mb-2">{incomingTransfer.filename}</p>
-                                        <div className="flex items-center justify-center md:justify-start gap-4 text-sm text-zinc-500">
-                                            <span>{(incomingTransfer.size / 1024 / 1024).toFixed(2)} MB</span>
-                                            <span>•</span>
-                                            <span>From {incomingTransfer.sender}</span>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex gap-3 w-full md:w-auto">
-                                        <button
-                                            onClick={handleRejectTransfer}
-                                            className="flex-1 md:flex-none py-3 px-6 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-bold hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-                                        >
-                                            Decline
-                                        </button>
-                                        <button
-                                            onClick={handleAcceptTransfer}
-                                            className="flex-1 md:flex-none py-3 px-8 rounded-xl bg-violet-600 text-white font-bold hover:bg-violet-700 transition-colors shadow-lg shadow-violet-500/25 flex items-center justify-center gap-2"
-                                        >
-                                            <Download className="w-4 h-4" />
-                                            Accept
-                                        </button>
-                                    </div>
+                {/* Incoming Files Queue */}
+                <div className="w-full space-y-4 max-h-[60vh] overflow-y-auto">
+                    <AnimatePresence mode="popLayout">
+                        {incomingFiles.length > 0 ? (
+                            incomingFiles.map((file, index) => (
+                                <IncomingFileCard
+                                    key={`${file.transferId}-${file.name}-${index}`}
+                                    file={file}
+                                    onAccept={handleAcceptFile}
+                                    onReject={handleRejectFile}
+                                    onDownload={handleDownloadFile}
+                                />
+                            ))
+                        ) : (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="w-full text-center p-10 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl"
+                            >
+                                <div className="flex flex-col items-center gap-3 text-zinc-400">
+                                    <Shield className="w-8 h-8 opacity-50" />
+                                    <p className="text-sm font-medium">Waiting for incoming files...</p>
                                 </div>
-                            </GlassCard>
-                        </motion.div>
-                    ) : (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="w-full text-center p-10 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl"
-                        >
-                            <div className="flex flex-col items-center gap-3 text-zinc-400">
-                                <Shield className="w-8 h-8 opacity-50" />
-                                <p className="text-sm font-medium">Waiting for secure connection...</p>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
             </div>
         </div>
     );

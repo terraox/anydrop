@@ -1,17 +1,28 @@
 /// API and WebSocket constants for AnyDrop
+/// IMPORTANT: Do NOT use hardcoded IPs. Always use discovered device IPs from mDNS.
+/// These constants are for reference only - actual URLs must be built from discovered device IPs.
 class ApiConstants {
-  // Backend Base URL
-  static const String baseUrl = 'http://192.168.1.2:8080';
+  // NOTE: baseUrl should NOT be used for local file transfer
+  // This is kept for backward compatibility with main server API only
+  // For local file transfer, ALWAYS use discovered device IP from mDNS
+  @Deprecated('DO NOT USE for local file transfer. Use discovered device IP from mDNS instead. This is only for main server API.')
+  static const String baseUrl = 'http://192.168.1.4:8080';
+  
+  @Deprecated('Use discovered device IP from mDNS instead')
   static const String apiUrl = '$baseUrl/api';
 
-  // WebSocket Endpoints
-  static const String wsUrl = 'ws://192.168.1.2:8080/ws';
-  static const String wsTransfer = '$wsUrl/transfer';
-  static const String wsTrackpad = '$wsUrl/trackpad';
+  // WebSocket Endpoints - MUST use discovered device IP, not hardcoded
+  // IMPORTANT: Use only /ws path (not /ws/transfer or /ws/trackpad)
+  // Single WebSocket path for all signaling
+  @Deprecated('Use discovered device IP from mDNS to build WebSocket URL')
+  static String getWsUrl(String deviceIp, int devicePort) => 'ws://$deviceIp:$devicePort/ws';
+  
+  // REMOVED: getWsTransferUrl - use getWsUrl instead (single /ws path)
+  // REMOVED: getWsTrackpadUrl - use getWsUrl instead (single /ws path)
 
   // Auth Endpoints
   static const String login = '$apiUrl/auth/login';
-  static const String register = '$apiUrl/auth/register';
+  static const String register = '$apiUrl/auth/signup';
   static const String logout = '$apiUrl/auth/logout';
 
   // User Endpoints
