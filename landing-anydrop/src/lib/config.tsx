@@ -29,29 +29,30 @@ export const Highlight = ({
 export const BLUR_FADE_DELAY = 0.15;
 
 export const siteConfig = {
-  name: "Cal AI",
-  description: "Smart scheduling powered by AI.",
-  cta: "Get Started",
-  url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+  name: "AnyDrop",
+  description: "The fastest cross-platform file transfer tool for your local network.",
+  cta: "Download Now",
+  url: process.env.NEXT_PUBLIC_APP_URL || "https://anydrop.com",
   keywords: [
-    "AI Calendar",
-    "Smart Scheduling",
-    "Productivity",
-    "Time Management",
+    "File Transfer",
+    "Local Network",
+    "AirDrop Alternative",
+    "Cross-Platform",
+    "Fast Sharing",
   ],
   links: {
-    email: "support@calai.app",
-    twitter: "https://twitter.com/calaiapp",
-    discord: "https://discord.gg/calaiapp",
-    github: "https://github.com/calaiapp",
-    instagram: "https://instagram.com/calaiapp",
+    email: "support@anydrop.com",
+    twitter: "https://twitter.com/anydrop",
+    discord: "https://discord.gg/anydrop",
+    github: "https://github.com/anydrop",
+    instagram: "https://instagram.com/anydrop",
   },
   nav: {
     links: [
-      { id: 1, name: "Home", href: "#hero" },
+      { id: 1, name: "Features", href: "#features" },
       { id: 2, name: "How it Works", href: "#bento" },
-      { id: 3, name: "Features", href: "#features" },
-      { id: 4, name: "Pricing", href: "#pricing" },
+      { id: 3, name: "Pricing", href: "#pricing" },
+      { id: 4, name: "Download", href: "#download" },
     ],
   },
   hero: {
@@ -59,28 +60,30 @@ export const siteConfig = {
       <svg
         width="16"
         height="16"
-        viewBox="0 0 16 16"
+        viewBox="0 0 24 24"
         fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className="dark:fill-white fill-[#364153]"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="dark:text-white text-black"
       >
-        <path d="M7.62758 1.09876C7.74088 1.03404 7.8691 1 7.99958 1C8.13006 1 8.25828 1.03404 8.37158 1.09876L13.6216 4.09876C13.7363 4.16438 13.8316 4.25915 13.8979 4.37347C13.9642 4.48779 13.9992 4.6176 13.9992 4.74976C13.9992 4.88191 13.9642 5.01172 13.8979 5.12604C13.8316 5.24036 13.7363 5.33513 13.6216 5.40076L8.37158 8.40076C8.25828 8.46548 8.13006 8.49952 7.99958 8.49952C7.8691 8.49952 7.74088 8.46548 7.62758 8.40076L2.37758 5.40076C2.26287 5.33513 2.16753 5.24036 2.10123 5.12604C2.03492 5.01172 2 4.88191 2 4.74976C2 4.6176 2.03492 4.48779 2.10123 4.37347C2.16753 4.25915 2.26287 4.16438 2.37758 4.09876L7.62758 1.09876Z" />
-        <path d="M2.56958 7.23928L2.37758 7.34928C2.26287 7.41491 2.16753 7.50968 2.10123 7.624C2.03492 7.73831 2 7.86813 2 8.00028C2 8.13244 2.03492 8.26225 2.10123 8.37657C2.16753 8.49089 2.26287 8.58566 2.37758 8.65128L7.62758 11.6513C7.74088 11.716 7.8691 11.75 7.99958 11.75C8.13006 11.75 8.25828 11.716 8.37158 11.6513L13.6216 8.65128C13.7365 8.58573 13.8321 8.49093 13.8986 8.3765C13.965 8.26208 14 8.13211 14 7.99978C14 7.86745 13.965 7.73748 13.8986 7.62306C13.8321 7.50864 13.7365 7.41384 13.6216 7.34828L13.4296 7.23828L9.11558 9.70328C8.77568 9.89744 8.39102 9.99956 7.99958 9.99956C7.60814 9.99956 7.22347 9.89744 6.88358 9.70328L2.56958 7.23928Z" />
-        <path d="M2.37845 10.5993L2.57045 10.4893L6.88445 12.9533C7.22435 13.1474 7.60901 13.2496 8.00045 13.2496C8.39189 13.2496 8.77656 13.1474 9.11645 12.9533L13.4305 10.4883L13.6225 10.5983C13.7374 10.6638 13.833 10.7586 13.8994 10.8731C13.9659 10.9875 14.0009 11.1175 14.0009 11.2498C14.0009 11.3821 13.9659 11.5121 13.8994 11.6265C13.833 11.7409 13.7374 11.8357 13.6225 11.9013L8.37245 14.9013C8.25915 14.966 8.13093 15 8.00045 15C7.86997 15 7.74175 14.966 7.62845 14.9013L2.37845 11.9013C2.2635 11.8357 2.16795 11.7409 2.10148 11.6265C2.03501 11.5121 2 11.3821 2 11.2498C2 11.1175 2.03501 10.9875 2.10148 10.8731C2.16795 10.7586 2.2635 10.6638 2.37845 10.5983V10.5993Z" />
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
       </svg>
     ),
-    badge: "Introducing custom automations",
-    title: "Meet your AI Agent Streamline your workflow",
+    badge: "New: Pro Plan with Unlimited Storage",
+    title: "Share Files Instantly Across Any Device",
     description:
-      "AI assistant designed to streamline your digital workflows and handle mundane tasks, so you can focus on what truly matters",
+      "Send photos, videos, and large files directly between devices on your local network. No cloud needed, no size limits, lightspeed transfer.",
     cta: {
       primary: {
-        text: "Try for Free",
-        href: "#",
+        text: "Download Now",
+        href: "#download",
       },
       secondary: {
-        text: "Log in",
-        href: "#",
+        text: "View Pricing",
+        href: "#pricing",
       },
     },
   },
@@ -286,62 +289,62 @@ export const siteConfig = {
     ],
   },
   featureSection: {
-    title: "Simple. Seamless. Smart.",
+    title: "Simple. Fast. Universal.",
     description:
-      "Discover how SkyAgent transforms your commands into action in four easy steps",
+      "Experience the future of file sharing. No clouds, no cables, just instant transfer.",
     items: [
       {
         id: 1,
-        title: "Ask Your AI Agent Directly",
+        title: "Cross-Platform Freedom",
         content:
-          "Speak or type your command—let SkyAgent capture your intent. Your request instantly sets the process in motion.",
+          "Send files between iOS, Android, macOS, Windows, and Linux. AnyDrop bridges the gap between all your devices.",
         image:
-          "https://images.unsplash.com/photo-1720371300677-ba4838fa0678?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+          "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&q=80&w=2070",
       },
       {
         id: 2,
-        title: "Let SkyAgent Process It",
+        title: "Warp Speed Transfer",
         content:
-          "We prioritize the needs and preferences of our users in our design process.",
+          "Utilize your local network's full bandwidth. Transfer gigabytes in seconds, not minutes.",
         image:
-          "https://images.unsplash.com/photo-1686170287433-c95faf6d3608?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxmZWF0dXJlZC1waG90b3MtZmVlZHwzfHx8ZW58MHx8fHx8fA%3D%3D",
+          "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=2070",
       },
       {
         id: 3,
-        title: "Receive Instant, Actionable Results",
+        title: "Privacy First",
         content:
-          "Our features seamlessly integrate with your existing systems for a smooth experience.",
+          "Your files never leave your local network. No cloud storage means no prying eyes.",
         image:
-          "https://images.unsplash.com/photo-1720378042271-60aff1e1c538?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxmZWF0dXJlZC1waG90b3MtZmVlZHwxMHx8fGVufDB8fHx8fA%3D%3D",
+          "https://images.unsplash.com/photo-1563206767-5b1d97299337?auto=format&fit=crop&q=80&w=2070",
       },
       {
         id: 4,
-        title: "Continuous Improvement",
+        title: "No File Size Limits",
         content:
-          "We are constantly updating and improving our features to provide the best experience.",
+          "Send 4K videos, raw photos, or entire project folders. If your device can store it, AnyDrop can send it.",
         image:
-          "https://images.unsplash.com/photo-1666882990322-e7f3b8df4f75?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1yZWxhdGVkfDF8fHxlbnwwfHx8fHw%3D",
+          "https://images.unsplash.com/photo-1558494949-efdeb6bf80d1?auto=format&fit=crop&q=80&w=2070",
       },
     ],
   },
   bentoSection: {
-    title: "Empower Your Workflow with AI",
+    title: "Everything you need to share",
     description:
-      "Ask your AI Agent for real-time collaboration, seamless integrations, and actionable insights to streamline your operations.",
+      "Powerful features designed to make file transfer effortless and secure.",
     items: [
       {
         id: 1,
         content: <FirstBentoAnimation />,
-        title: "Real-time AI Collaboration",
+        title: "Lightning Fast",
         description:
-          "Experience real-time assistance. Ask your AI Agent to coordinate tasks, answer questions, and maintain team alignment.",
+          "Optimized for maximum speed on your local WiFi network. 3x faster than cloud.",
       },
       {
         id: 2,
         content: <SecondBentoAnimation />,
-        title: "Seamless Integrations",
+        title: "End-to-End Encryption",
         description:
-          "Unite your favorite tools for effortless connectivity. Boost productivity through interconnected workflows.",
+          "Pro users get military-grade encryption for sensitive file transfers.",
       },
       {
         id: 3,
@@ -353,16 +356,16 @@ export const siteConfig = {
             ]}
           />
         ),
-        title: "Instant Insight Reporting",
+        title: "Usage Analytics",
         description:
-          "Transform raw data into clear insights in seconds. Empower smarter decisions with real-time, always-learning intelligence.",
+          "Track your transfer history and data usage with beautiful interactive charts.",
       },
       {
         id: 4,
         content: <FourthBentoAnimation once={false} />,
-        title: "Smart Automation",
+        title: "Auto-Discovery",
         description:
-          "Set it, forget it. Your AI Agent tackles repetitive tasks so you can focus on strategy, innovation, and growth.",
+          "Instantly find nearby devices running AnyDrop. No pairing codes or complex setup needed.",
       },
     ],
   },
@@ -699,65 +702,46 @@ export const siteConfig = {
     },
   },
   pricing: {
-    title: "Pricing that scales with you",
+    title: "Simple, transparent pricing",
     description:
-      "Whichever plan you pick, it's free until you love your docs. That's our promise.",
+      "Start sharing for free. Upgrade for unlimited power and permanent storage.",
     pricingItems: [
       {
         name: "Free",
-        href: "#",
+        href: "#download",
         price: "$0",
         period: "month",
         yearlyPrice: "$0",
         features: [
-          "Custom domain",
-          "SEO-optimizations",
-          "Auto-generated API docs",
-          "Built-in components library",
+          "2GB Max File Size",
+          "5 Transfers per day",
+          "Local Network Transfer",
+          "Files expire in 24h",
+          "Standard Speed",
         ],
-        description: "Perfect for individual users",
-        buttonText: "Start Free",
+        description: "Perfect for casual sharing",
+        buttonText: "Download Free",
         buttonColor: "bg-accent text-primary",
         isPopular: false,
       },
       {
-        name: "Startup",
-        href: "#",
-        price: "$12",
+        name: "Pro",
+        href: "/user/checkout",
+        price: "$4.99",
         period: "month",
-        yearlyPrice: "$120",
+        yearlyPrice: "$49.99",
         features: [
-          "Custom domain",
-          "SEO-optimizations",
-          "Auto-generated API docs",
-          "Built-in components library",
-          "E-commerce integration",
-          "User authentication system",
-          "Multi-language support",
-          "Real-time collaboration tools",
+          "Unlimited Transfers",
+          "Unlimited File Size",
+          "Warp Speed (3x Faster)",
+          "Permanent Storage",
+          "Password Protection",
+          "Priority Support",
         ],
-        description: "Ideal for professionals and small teams",
+        description: "For power users who need the best",
         buttonText: "Upgrade to Pro",
-        buttonColor: "bg-secondary text-white",
-        isPopular: true,
-      },
-      {
-        name: "Enterprise",
-        href: "#",
-        price: "$24",
-        period: "month",
-        yearlyPrice: "$240",
-        features: [
-          "Custom domain",
-          "SEO-optimizations",
-          "Auto-generated API docs",
-          "Built-in components librarys",
-          "Real-time collaboration tools",
-        ],
-        description: "Best for large teams and enterprise-level organizations",
-        buttonText: "Contact Sales",
         buttonColor: "bg-primary text-primary-foreground",
-        isPopular: false,
+        isPopular: true,
       },
     ],
   },
@@ -966,82 +950,78 @@ export const siteConfig = {
   faqSection: {
     title: "Frequently Asked Questions",
     description:
-      "Answers to common questions about SkyAgent and its features. If you have any other questions, please don't hesitate to contact us.",
+      "Everything you need to know about AnyDrop. Can't find the answer you're looking for? Reach out to our support team.",
     faQitems: [
       {
         id: 1,
-        question: "What is an AI Agent?",
+        question: "How does AnyDrop work?",
         answer:
-          "An AI Agent is an intelligent software program that can perform tasks autonomously, learn from interactions, and make decisions to help achieve specific goals. It combines artificial intelligence and machine learning to provide personalized assistance and automation.",
+          "AnyDrop uses your local WiFi network to transfer files directly between devices. This means files never leave your network, ensuring maximum speed and privacy without using your internet data plan.",
       },
       {
         id: 2,
-        question: "How does SkyAgent work?",
+        question: "Is there a file size limit?",
         answer:
-          "SkyAgent works by analyzing your requirements, leveraging advanced AI algorithms to understand context, and executing tasks based on your instructions. It can integrate with your workflow, learn from feedback, and continuously improve its performance.",
+          "The Free plan has a 2GB per file limit. The Pro plan allows Unlimited file sizes, so you can transfer massive 4K videos or project folders with ease.",
       },
       {
         id: 3,
-        question: "How secure is my data?",
+        question: "Is it secure?",
         answer:
-          "We implement enterprise-grade security measures including end-to-end encryption, secure data centers, and regular security audits. Your data is protected according to industry best practices and compliance standards.",
+          "Absolutely. Transfers happen locally on your network. For Pro users, we offer additional end-to-end encryption for maximum security for sensitive data.",
       },
       {
         id: 4,
-        question: "Can I integrate my existing tools?",
+        question: "Which devices are supported?",
         answer:
-          "Yes, SkyAgent is designed to be highly compatible with popular tools and platforms. We offer APIs and pre-built integrations for seamless connection with your existing workflow tools and systems.",
+          "AnyDrop is truly cross-platform. We support iOS, Android, macOS, Windows, and Linux. You can share files between any combination of these devices seamlessly.",
       },
       {
         id: 5,
-        question: "Is there a free trial available?",
+        question: "Do files expire?",
         answer:
-          "Yes, we offer a 14-day free trial that gives you full access to all features. No credit card is required to start your trial, and you can upgrade or cancel at any time.",
+          "On the Free plan, shared file links expire after 24 hours to keep your device clean. Pro users get Permanent Storage options to keep files accessible as long as needed.",
       },
       {
         id: 6,
-        question: "How does SkyAgent save me time?",
+        question: "Do I need to create an account?",
         answer:
-          "SkyAgent automates repetitive tasks, streamlines workflows, and provides quick solutions to common challenges. This automation and efficiency can save hours of manual work, allowing you to focus on more strategic activities.",
+          "No account is needed for basic sending and receiving on the Free plan. A Pro account is required to unlock unlimited limits and advanced features.",
       },
     ],
   },
   ctaSection: {
     id: "cta",
-    title: "Automate. Simplify. Thrive",
+    title: "Ready to Share at Warp Speed?",
     backgroundImage: "/agent-cta-background.png",
     button: {
-      text: "Start Your 30-Day Free Trial Today",
-      href: "#",
+      text: "Download AnyDrop Now",
+      href: "#download",
     },
-    subtext: "Cancel anytime, no questions asked",
+    subtext: "No credit card required for free use.",
   },
   footerLinks: [
     {
-      title: "Company",
+      title: "Product",
       links: [
-        { id: 1, title: "About", url: "#" },
-        { id: 2, title: "Contact", url: "#" },
-        { id: 3, title: "Blog", url: "#" },
-        { id: 4, title: "Story", url: "#" },
+        { id: 1, title: "Features", url: "#features" },
+        { id: 2, title: "Pricing", url: "#pricing" },
+        { id: 3, title: "Download", url: "#download" },
       ],
     },
     {
-      title: "Products",
+      title: "Support",
       links: [
-        { id: 5, title: "Company", url: "#" },
-        { id: 6, title: "Product", url: "#" },
-        { id: 7, title: "Press", url: "#" },
-        { id: 8, title: "More", url: "#" },
+        { id: 4, title: "Help Center", url: "#" },
+        { id: 5, title: "Contact Us", url: "#" },
+        { id: 6, title: "Status", url: "#" },
       ],
     },
     {
-      title: "Resources",
+      title: "Legal",
       links: [
-        { id: 9, title: "Press", url: "#" },
-        { id: 10, title: "Careers", url: "#" },
-        { id: 11, title: "Newsletters", url: "#" },
-        { id: 12, title: "More", url: "#" },
+        { id: 7, title: "Privacy Policy", url: "#" },
+        { id: 8, title: "Terms of Service", url: "#" },
       ],
     },
   ],
