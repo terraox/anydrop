@@ -35,6 +35,7 @@ class TransferService extends ChangeNotifier {
   String? _connectedDeviceIp;
   int? _connectedDevicePort;
   Completer<bool>? _readyCompleter; // Completer to wait for READY message
+  Completer<bool>? _acceptCompleter; // Completer to wait for ACCEPT message
   
   // Transfer state
   String? _currentTransferId;
@@ -290,11 +291,23 @@ class TransferService extends ChangeNotifier {
   /// Handle ACCEPT message from receiver
   void _handleAcceptMessage(Map<String, dynamic> json) {
     final transferId = json['transferId'] as String?;
-    debugPrint('✅ Receiver accepted transfer: $transferId');
+    debugPrint('🔔 ACCEPT MESSAGE RECEIVED!');
+    debugPrint('   -> Received transferId: $transferId');
+    debugPrint('   -> Current transferId: $_currentTransferId');
+    debugPrint('   -> Pending file: ${_pendingSendFile?.path}');
+    debugPrint('   -> Target IP: $_targetIp:$_targetPort');
+    
+    // Complete the accept completer if waiting
+    if (_acceptCompleter != null && !_acceptCompleter!.isCompleted) {
+      _acceptCompleter!.complete(true);
+    }
     
     // If we have a pending file, start the upload
-    if (_pendingSendFile != null && transferId == _currentTransferId) {
+    if (_pendingSendFile != null) {
+      debugPrint('✅ ACCEPT received - starting HTTP upload NOW!');
       startBinaryUpload(_pendingSendFile!);
+    } else {
+      debugPrint('❌ No pending file to upload!');
     }
   }
   
@@ -302,6 +315,12 @@ class TransferService extends ChangeNotifier {
   void _handleRejectMessage(Map<String, dynamic> json) {
     final transferId = json['transferId'] as String?;
     debugPrint('❌ Receiver rejected transfer: $transferId');
+    
+    // Complete the accept completer with false (rejected)
+    if (_acceptCompleter != null && !_acceptCompleter!.isCompleted) {
+      _acceptCompleter!.complete(false);
+    }
+    
     _isSending = false;
     _currentTargetId = null;
     _currentTransferId = null;
@@ -731,15 +750,45 @@ class TransferService extends ChangeNotifier {
       return;
     }
     
-    // Step 3: Wait for ACCEPT message (handled in _handleAcceptMessage)
-    // Once ACCEPT is received, startBinaryUpload() will be called automatically
+    // Step 3: Wait for ACCEPT message using Completer
     debugPrint('⏳ Waiting for receiver to accept transfer...');
+    _acceptCompleter = Completer<bool>();
+    
+    // Wait for ACCEPT with 60 second timeout
+    try {
+      final accepted = await _acceptCompleter!.future.timeout(
+        const Duration(seconds: 60),
+        onTimeout: () {
+          debugPrint('❌ Timeout waiting for ACCEPT');
+          return false;
+        },
+      );
+      
+      if (!accepted) {
+        debugPrint('❌ Transfer was rejected or timed out');
+        _isSending = false;
+        _currentTransferId = null;
+        _pendingSendFile = null;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('❌ Error waiting for ACCEPT: $e');
+      _isSending = false;
+      notifyListeners();
+    } finally {
+      _acceptCompleter = null;
+    }
   }
 
   String? _targetIp;
   int? _targetPort;
 
-  /// Start binary upload using HTTP Streaming
+  /// Start binary upload using HTTP Streaming (RAW BINARY)
+  /// 
+  /// ❌ Do NOT use MultipartRequest
+  /// ❌ Do NOT use multipart/form-data  
+  /// ✅ Use application/octet-stream
+  /// ✅ Stream file bytes directly in request body
   Future<void> startBinaryUpload(File file) async {
     if (_currentTargetId == null) {
       debugPrint('❌ Cannot start upload: target not set');
@@ -750,7 +799,6 @@ class TransferService extends ChangeNotifier {
     final fileName = file.path.split('/').last;
     
     // IMPORTANT: Always use discovered device IP from mDNS, never localhost
-    // Using localhost would only work on the same machine, not for LAN transfers
     if (_targetIp == null) {
       debugPrint('❌ Cannot upload: target device IP not available. Device must be discovered via mDNS first.');
       _isSending = false;
@@ -759,76 +807,66 @@ class TransferService extends ChangeNotifier {
     }
     
     // Use discovered device IP and port (from mDNS)
-    final baseUrl = 'http://$_targetIp:$_targetPort';
-    final url = Uri.parse('$baseUrl/upload'); // Use /upload endpoint, not /api/files/transfer
+    // Include transferId in query param for backend
+    final uploadUrl = 'http://$_targetIp:$_targetPort/upload?transferId=${_currentTransferId ?? ''}';
     
-    debugPrint('🚀 Starting HTTP Stream upload to $_targetIp:$_targetPort');
+    debugPrint('🚀 Starting RAW HTTP Stream upload to $_targetIp:$_targetPort');
     debugPrint('   File: ${file.path} (${(fileSize / 1024 / 1024).toStringAsFixed(2)}MB)');
+    debugPrint('   Content-Type: application/octet-stream');
     
     try {
-      // Get pairing code from target device first
-      final pairingCodeUrl = Uri.parse('http://$_targetIp:$_targetPort/api/pairing-code');
-      final pairingResponse = await http.get(pairingCodeUrl).timeout(const Duration(seconds: 5));
+      // Create HTTP client for streaming upload
+      final httpClient = HttpClient();
+      final request = await httpClient.postUrl(Uri.parse(uploadUrl));
       
-      if (pairingResponse.statusCode != 200) {
-        debugPrint('❌ Failed to get pairing code: ${pairingResponse.statusCode}');
-        _isSending = false;
-        notifyListeners();
-        return;
-      }
+      // 🚨 MANDATORY: Set headers for raw binary streaming
+      request.headers.set('X-File-Name', fileName);
+      request.headers.set('Content-Type', 'application/octet-stream');
+      request.headers.set('Content-Length', fileSize.toString());
+      request.headers.set('X-Transfer-Id', _currentTransferId ?? '');
+      request.headers.set('X-Sender-Device-Id', _deviceId ?? 'flutter-app');
       
-      final pairingData = jsonDecode(pairingResponse.body);
-      final pairingCode = pairingData['code'] as String;
-      debugPrint('🔐 Got pairing code: $pairingCode');
-      
-      final request = http.MultipartRequest('POST', url);
-      
-      // IMPORTANT: Add pairing code headers (required by server for security)
-      // These headers authenticate the transfer request
-      request.headers['X-Device-Id'] = _currentTargetId ?? '';
-      request.headers['X-Pairing-Code'] = pairingCode;
-      request.headers['X-Sender-Device-Id'] = _deviceId ?? '';
-      
-      // Use HTTP streaming for file transfer (not WebSocket)
-      // File data is streamed via HTTP multipart upload
-      final stream = file.openRead();
+      // Stream file bytes directly to request body
       int bytesSent = 0;
+      final fileStream = file.openRead();
       
-      final multipartFile = http.MultipartFile(
-        'file',
-        stream.map((chunk) {
-          bytesSent += chunk.length;
-          _progress = (bytesSent / fileSize).clamp(0.0, 1.0);
-          
-          // Throttled UI update
-          if (bytesSent % (CHUNK_SIZE * 5) < chunk.length || bytesSent >= fileSize) {
-            notifyListeners();
-            debugPrint('📊 Upload: ${(_progress * 100).toStringAsFixed(1)}%');
-          }
-          
-          return chunk;
-        }),
-        fileSize,
-        filename: fileName,
-      );
-      
-      request.files.add(multipartFile);
-      
-      // Finalize the request
-      final response = await request.send();
-      
-      if (response.statusCode == 200) {
-        debugPrint('✅ Transfer completed successfully (HTTP)!');
+      // Transform stream to track progress
+      final progressStream = fileStream.map((chunk) {
+        bytesSent += chunk.length;
+        _progress = (bytesSent / fileSize).clamp(0.0, 1.0);
         
-        // Notify the target via WebSocket that we're finished (optional handshake)
+        // Throttled UI update (every ~5%)
+        if (bytesSent % (fileSize ~/ 20 + 1) < chunk.length || bytesSent >= fileSize) {
+          notifyListeners();
+          debugPrint('📊 UPLOAD PROGRESS: ${(_progress * 100).toStringAsFixed(1)}%');
+        }
+        
+        return chunk;
+      });
+      
+      // 🚨 MANDATORY: Add file stream directly to request (NOT FormData)
+      await request.addStream(progressStream);
+      
+      // Send the request and get response
+      final response = await request.close();
+      
+      // Read response body
+      final responseBody = await response.transform(utf8.decoder).join();
+      
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        debugPrint('✅ UPLOAD COMPLETE! Response: $responseBody');
+        
+        // Notify the target via WebSocket that we're finished (optional)
         _send({
           'type': 'TRANSFER_FINISH',
           'targetId': _currentTargetId,
           'transferId': _currentTransferId,
         });
       } else {
-        debugPrint('❌ HTTP Upload failed: ${response.statusCode}');
+        debugPrint('❌ UPLOAD FAILED: ${response.statusCode} - $responseBody');
       }
+      
+      httpClient.close();
       
       _isSending = false;
       _progress = 1.0;

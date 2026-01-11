@@ -19,7 +19,7 @@ const server = createServer(app);
 
 // WebSocket server for signaling (NOT for file data - files use HTTP)
 // IMPORTANT: Bind to 0.0.0.0 to accept connections from all network interfaces
-const wss = new WebSocketServer({ 
+const wss = new WebSocketServer({
   server,
   path: '/ws',
   perMessageDeflate: false // Disable compression for simplicity
@@ -35,25 +35,55 @@ app.use(cors({
   credentials: true
 }));
 
+// Broadcast function for progress updates (defined early for use in routers)
+// Track all connected clients (both senders and receiver UI)
+const connectedClients = new Set();
+
+const broadcastToClients = (message) => {
+  const messageStr = JSON.stringify(message);
+  connectedClients.forEach(client => {
+    if (client.readyState === 1) { // WebSocket.OPEN
+      try {
+        client.send(messageStr);
+      } catch (error) {
+        console.error('❌ Error broadcasting to client:', error);
+      }
+    }
+  });
+};
+
+// ⚠️ IMPORTANT: Mount file server routes BEFORE express.json()
+// This ensures /upload receives raw streaming (application/octet-stream)
+// and is NOT parsed by express.json() middleware
+app.use('/', createFileServerRouter(broadcastToClients));
+
+// JSON body parsing for other routes (AFTER file server)
+// ❌ Do NOT use express.json for /upload - it uses raw streaming
 app.use(express.json());
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+  res.json({
+    status: 'ok',
     timestamp: new Date().toISOString(),
     device: deviceManager.getDeviceInfo()
   });
 });
 
 // Identity endpoint for Flutter app discovery (subnet scanning)
+// This is the critical endpoint that mobile app uses to discover desktop devices
 app.get('/api/identify', (req, res) => {
   const deviceInfo = deviceManager.getDeviceInfo();
+  const deviceId = deviceInfo?.deviceId || 'unknown-device';
+  const deviceName = deviceInfo?.deviceName || 'AnyDrop-Desktop';
+
+  console.log('📱 /api/identify called - returning:', { deviceId, deviceName });
+
   res.json({
     app: 'AnyDrop',
-    name: deviceInfo.deviceName,
-    id: deviceInfo.deviceId,
-    deviceId: deviceInfo.deviceId,
+    name: deviceName,
+    id: deviceId,
+    deviceId: deviceId,
     icon: 'laptop',
     type: 'DESKTOP',
     version: '1.0.0'
@@ -72,62 +102,43 @@ app.get('/api/test', (req, res) => {
   });
 });
 
-// Broadcast function for progress updates
-const broadcastToClients = (message) => {
-  const messageStr = JSON.stringify(message);
-  connectedClients.forEach(client => {
-    if (client.readyState === 1) { // WebSocket.OPEN
-      try {
-        client.send(messageStr);
-      } catch (error) {
-        console.error('❌ Error broadcasting to client:', error);
-      }
-    }
-  });
-};
-
-// File server routes (upload, pairing-code, etc.)
-// Pass broadcast function to file server for progress updates
-app.use('/', createFileServerRouter(broadcastToClients));
-
 // File transfer API routes
 app.use('/api/transfer', localFileTransferRoutes);
 
 // WebSocket server for signaling (receiver hosts this, sender connects to it)
 // File data is NOT sent via WebSocket - only used for signaling and progress updates
-// Track all connected clients (both senders and receiver UI)
-const connectedClients = new Set();
+// Note: connectedClients is defined earlier (before express.json) for broadcast function
 
 wss.on('connection', (ws, req) => {
   const clientIp = req.socket.remoteAddress;
   console.log(`🔌 WebSocket client connected from ${clientIp}`);
-  
+
   // Add client to connected set
   connectedClients.add(ws);
-  
+
   // READY Handshake: Immediately send READY message when client connects
   // This signals that the receiver is ready to accept file transfers
-  ws.send(JSON.stringify({ 
-    type: 'READY', 
+  ws.send(JSON.stringify({
+    type: 'READY',
     role: 'receiver'
   }));
   console.log(`✅ Sent READY handshake to ${clientIp}`);
-  
+
   // Handle incoming messages (signaling only)
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message.toString());
       console.log('📨 WebSocket message:', data);
-      
+
       // Handle different message types for signaling
       if (data.type === 'FILE_METADATA') {
         // Sender is announcing file transfer (file will come via HTTP POST /upload)
         // Support both single file and multiple files
         const files = data.files || [{ name: data.fileName, size: data.size }];
         const senderName = data.senderName || data.senderId || 'Unknown Device';
-        
+
         console.log(`📤 File metadata received: ${files.length} file(s) from ${senderName}`);
-        
+
         // Broadcast FILE_METADATA to ALL connected clients (including receiver UI)
         // This allows the receiver UI to show incoming files
         const metadataMessage = JSON.stringify({
@@ -138,19 +149,48 @@ wss.on('connection', (ws, req) => {
           senderName: senderName,
           timestamp: Date.now()
         });
-        
+
         // Broadcast to all clients (both sender and receiver UI)
         connectedClients.forEach(client => {
           if (client.readyState === 1) { // WebSocket.OPEN
             client.send(metadataMessage);
           }
         });
-        
-        // Auto-accept for now (can be changed to show UI prompt)
-        ws.send(JSON.stringify({ 
-          type: 'ACCEPT', 
-          transferId: data.transferId 
-        }));
+
+        // DO NOT auto-accept - receiver UI will send ACCEPT when user clicks Accept button
+      } else if (data.type === 'ACCEPT') {
+        // Receiver UI sent ACCEPT - forward to sender
+        console.log('✅ ACCEPT received from receiver UI for transfer:', data.transferId);
+
+        // Broadcast ACCEPT to all connected clients (sender will receive this)
+        const acceptMessage = JSON.stringify({
+          type: 'ACCEPT',
+          transferId: data.transferId
+        });
+
+        let sentCount = 0;
+        console.log(`📢 Broadcasting ACCEPT to ${connectedClients.size} connected clients...`);
+        connectedClients.forEach(client => {
+          if (client.readyState === 1) { // WebSocket.OPEN
+            client.send(acceptMessage);
+            sentCount++;
+          }
+        });
+        console.log(`📢 ACCEPT sent to ${sentCount} clients`);
+      } else if (data.type === 'REJECT') {
+        // Receiver UI sent REJECT - forward to sender
+        console.log('❌ REJECT received from receiver UI for transfer:', data.transferId);
+
+        const rejectMessage = JSON.stringify({
+          type: 'REJECT',
+          transferId: data.transferId
+        });
+
+        connectedClients.forEach(client => {
+          if (client.readyState === 1) {
+            client.send(rejectMessage);
+          }
+        });
       } else if (data.type === 'PROGRESS') {
         // Progress updates from sender - broadcast to receiver UI
         const progressMessage = JSON.stringify({
@@ -161,7 +201,7 @@ wss.on('connection', (ws, req) => {
           totalBytes: data.totalBytes,
           percentage: data.percentage || ((data.receivedBytes / data.totalBytes) * 100).toFixed(2)
         });
-        
+
         // Broadcast progress to all clients (receiver UI will display it)
         connectedClients.forEach(client => {
           if (client.readyState === 1) { // WebSocket.OPEN
@@ -173,11 +213,11 @@ wss.on('connection', (ws, req) => {
       console.error('❌ WebSocket message error:', error);
     }
   });
-  
+
   ws.on('error', (error) => {
     console.error('❌ WebSocket error:', error);
   });
-  
+
   ws.on('close', () => {
     console.log(`🔌 WebSocket client disconnected from ${clientIp}`);
     connectedClients.delete(ws);
@@ -221,9 +261,9 @@ app.post('/api/device/name', async (req, res) => {
     // Restart mDNS advertising with new name
     const deviceId = deviceManager.getDeviceId();
     updateDeviceName(PORT, name.trim(), deviceId);
-    res.json({ 
-      success: true, 
-      device: deviceManager.getDeviceInfo() 
+    res.json({
+      success: true,
+      device: deviceManager.getDeviceInfo()
     });
   } else {
     res.status(500).json({ error: 'Failed to update device name' });
@@ -264,7 +304,7 @@ const startLocalFileTransferServer = async () => {
 
     // Start mDNS browser for device discovery
     mdnsBrowser.startBrowsing();
-    
+
     // Listen for device discovery events
     mdnsBrowser.on('deviceDiscovered', (device) => {
       console.log(`📱 Discovered device: ${device.deviceName} (${device.ip}:${device.port})`);

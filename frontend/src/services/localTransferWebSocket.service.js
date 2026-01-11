@@ -10,8 +10,14 @@ class LocalTransferWebSocketService {
         this.maxReconnectAttempts = 5;
         this.reconnectDelay = 3000;
         this.listeners = new Map();
-        this.isConnected = false;
         this.receiverUrl = null;
+    }
+
+    /**
+     * Check if WebSocket is connected
+     */
+    get isConnected() {
+        return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
     }
 
     /**
@@ -20,16 +26,31 @@ class LocalTransferWebSocketService {
      * @param {number} receiverPort - Receiver's port (default 8080)
      */
     connect(receiverIp, receiverPort = 8080) {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            console.log('✅ WebSocket already connected');
-            return;
+        // Close any existing connection that's not fully open
+        if (this.ws) {
+            if (this.ws.readyState === WebSocket.OPEN) {
+                console.log('✅ WebSocket already connected');
+                // Emit ready event for existing connection
+                this._emit('ready', { role: 'receiver' });
+                return;
+            }
+            // Close stale/connecting/closing socket
+            if (this.ws.readyState !== WebSocket.CLOSED) {
+                console.log('🔄 Closing stale WebSocket connection...');
+                try {
+                    this.ws.close();
+                } catch (e) {
+                    // Ignore close errors
+                }
+            }
+            this.ws = null;
         }
 
         // NOTE: localhost is acceptable ONLY for receiver UI connecting to its own backend
         // For device-to-device transfers, use discovered IP from mDNS
         // We allow localhost here because receiver UI is on same machine as backend
         const isReceiverUI = receiverIp === 'localhost' || receiverIp === '127.0.0.1';
-        
+
         if (isReceiverUI) {
             console.log('⚠️ Using localhost - OK for receiver UI connecting to its own backend');
         } else {
@@ -45,7 +66,6 @@ class LocalTransferWebSocketService {
 
             this.ws.onopen = () => {
                 console.log('✅ WebSocket connected to receiver');
-                this.isConnected = true;
                 this.reconnectAttempts = 0;
                 this._emit('connected', {});
             };
@@ -67,9 +87,8 @@ class LocalTransferWebSocketService {
 
             this.ws.onclose = () => {
                 console.log('🔌 WebSocket closed');
-                this.isConnected = false;
                 this._emit('disconnected', {});
-                
+
                 // Auto-reconnect logic (optional - can be disabled)
                 // if (this.reconnectAttempts < this.maxReconnectAttempts) {
                 //     this.reconnectAttempts++;
@@ -128,9 +147,12 @@ class LocalTransferWebSocketService {
      */
     send(data) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            console.log('📤 Sending via WebSocket:', data);
             this.ws.send(JSON.stringify(data));
         } else {
             console.warn('⚠️ WebSocket not connected, cannot send message');
+            console.warn('   isConnected:', this.isConnected);
+            console.warn('   ws state:', this.ws?.readyState);
         }
     }
 
@@ -180,7 +202,6 @@ class LocalTransferWebSocketService {
             this.ws.close();
             this.ws = null;
         }
-        this.isConnected = false;
         this.receiverUrl = null;
     }
 }

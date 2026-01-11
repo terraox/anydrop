@@ -26,7 +26,7 @@ export default function Receive() {
     // The backend hosts the WebSocket server and broadcasts FILE_METADATA and PROGRESS
     // For now, we'll use HTTP polling or Server-Sent Events instead
     // OR: The receiver UI can connect to its own backend's WebSocket (localhost is OK for same-machine)
-    
+
     // Get receiver IP - for receiver UI on same machine as backend, use localhost
     // This is the ONLY case where localhost is acceptable (receiver UI to its own backend)
     const getReceiverIp = () => {
@@ -47,11 +47,33 @@ export default function Receive() {
         const receiverPort = getBackendPort();
 
         console.log('🔌 Receiver UI connecting to its own backend WebSocket:', `ws://${receiverIp}:${receiverPort}/ws`);
-        console.log('   ✅ This is the ONLY WebSocket connection for receiver UI');
-        console.log('   ✅ Uses /ws path (not /transfer)');
-        console.log('   ✅ localhost is OK here (receiver UI to its own backend)');
-        
-        LocalTransferWebSocketService.connect(receiverIp, receiverPort);
+
+        // Track reconnect attempts
+        let reconnectTimeout = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 10;
+        const baseReconnectDelay = 2000;
+
+        const attemptConnect = () => {
+            try {
+                LocalTransferWebSocketService.connect(receiverIp, receiverPort);
+            } catch (error) {
+                console.error('❌ Failed to connect WebSocket:', error);
+                setIsConnected(false);
+                scheduleReconnect();
+            }
+        };
+
+        const scheduleReconnect = () => {
+            if (reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                const delay = baseReconnectDelay * Math.min(reconnectAttempts, 5);
+                console.log(`🔄 Reconnecting in ${delay}ms... (attempt ${reconnectAttempts})`);
+                reconnectTimeout = setTimeout(attemptConnect, delay);
+            }
+        };
+
+        attemptConnect();
 
         // Listen for connection events
         const handleConnected = () => {
@@ -62,17 +84,20 @@ export default function Receive() {
         const handleDisconnected = () => {
             console.log('🔌 Disconnected from receiver WebSocket');
             setIsConnected(false);
+            // Try to reconnect
+            scheduleReconnect();
         };
 
         const handleReady = (data) => {
             console.log('✅ READY handshake received');
             setIsConnected(true);
+            reconnectAttempts = 0; // Reset reconnect counter on successful connection
         };
 
         // Listen for FILE_METADATA (incoming file announcement)
         const handleFileMetadata = (data) => {
             console.log('📥 FILE_METADATA received:', data);
-            
+
             const files = data.files || [];
             const newFiles = files.map((file, index) => ({
                 transferId: data.transferId,
@@ -103,7 +128,7 @@ export default function Receive() {
         // Listen for PROGRESS updates
         const handleProgress = (data) => {
             console.log('📊 PROGRESS update:', data);
-            
+
             setIncomingFiles(prev => prev.map(file => {
                 if (file.transferId === data.transferId && file.name === data.file) {
                     const speed = data.speed || 0;
@@ -123,7 +148,7 @@ export default function Receive() {
         // Listen for TRANSFER_COMPLETE
         const handleTransferComplete = (data) => {
             console.log('✅ TRANSFER_COMPLETE:', data);
-            
+
             setIncomingFiles(prev => prev.map(file => {
                 if (file.transferId === data.transferId && file.name === data.file) {
                     return {
@@ -145,7 +170,7 @@ export default function Receive() {
         // Listen for TRANSFER_ERROR
         const handleTransferError = (data) => {
             console.error('❌ TRANSFER_ERROR:', data);
-            
+
             setIncomingFiles(prev => prev.map(file => {
                 if (file.transferId === data.transferId && file.name === data.file) {
                     return {
@@ -160,6 +185,12 @@ export default function Receive() {
             toast.error(`Transfer failed: ${data.error || 'Unknown error'}`);
         };
 
+        // Handle WebSocket errors
+        const handleError = (error) => {
+            console.error('❌ WebSocket error:', error);
+            setIsConnected(false);
+        };
+
         // Register event listeners
         LocalTransferWebSocketService.on('connected', handleConnected);
         LocalTransferWebSocketService.on('disconnected', handleDisconnected);
@@ -167,38 +198,53 @@ export default function Receive() {
         LocalTransferWebSocketService.on('fileMetadata', handleFileMetadata);
         LocalTransferWebSocketService.on('progress', handleProgress);
         LocalTransferWebSocketService.on('transferComplete', handleTransferComplete);
-        LocalTransferWebSocketService.on('error', handleTransferError);
+        LocalTransferWebSocketService.on('error', handleError);
+        LocalTransferWebSocketService.on('transferError', handleTransferError);
 
         // Cleanup on unmount
         return () => {
+            // Clear reconnect timer
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+            }
+
             LocalTransferWebSocketService.off('connected', handleConnected);
             LocalTransferWebSocketService.off('disconnected', handleDisconnected);
             LocalTransferWebSocketService.off('ready', handleReady);
             LocalTransferWebSocketService.off('fileMetadata', handleFileMetadata);
             LocalTransferWebSocketService.off('progress', handleProgress);
             LocalTransferWebSocketService.off('transferComplete', handleTransferComplete);
-            LocalTransferWebSocketService.off('error', handleTransferError);
-            LocalTransferWebSocketService.disconnect();
+            LocalTransferWebSocketService.off('error', handleError);
+            LocalTransferWebSocketService.off('transferError', handleTransferError);
+            // Don't disconnect - keep connection alive for receiving files
+            // LocalTransferWebSocketService.disconnect();
         };
     }, [deviceName]);
 
     // Handle file acceptance
     const handleAcceptFile = useCallback((file) => {
         console.log('✅ Accepting file:', file.name);
-        
-        // Send ACCEPT message via WebSocket (if needed)
-        // For now, backend auto-accepts, so we just update UI
-        setIncomingFiles(prev => prev.map(f => 
+
+        // Send ACCEPT message via WebSocket to trigger sender's HTTP upload
+        LocalTransferWebSocketService.send({
+            type: 'ACCEPT',
+            transferId: file.transferId
+        });
+
+        // Update UI to show receiving state
+        setIncomingFiles(prev => prev.map(f =>
             f.transferId === file.transferId && f.name === file.name
                 ? { ...f, status: 'receiving' }
                 : f
         ));
+
+        toast.info(`Accepting ${file.name}...`);
     }, []);
 
     // Handle file rejection
     const handleRejectFile = useCallback((file) => {
         console.log('❌ Rejecting file:', file.name);
-        
+
         // Send REJECT message via WebSocket
         LocalTransferWebSocketService.send({
             type: 'REJECT',
@@ -206,7 +252,7 @@ export default function Receive() {
         });
 
         // Remove from queue
-        setIncomingFiles(prev => prev.filter(f => 
+        setIncomingFiles(prev => prev.filter(f =>
             !(f.transferId === file.transferId && f.name === file.name)
         ));
 
@@ -222,9 +268,9 @@ export default function Receive() {
 
         const backendPort = getBackendPort();
         const downloadUrl = `http://localhost:${backendPort}${file.downloadUrl}`;
-        
+
         console.log('📥 Downloading file:', downloadUrl);
-        
+
         // Trigger download via user action (required for mobile browsers)
         const link = document.createElement('a');
         link.href = downloadUrl;
@@ -255,19 +301,77 @@ export default function Receive() {
 
     return (
         <div className="p-6 h-full w-full flex flex-col items-center justify-center relative overflow-hidden">
-            {/* Background Pulse */}
+            {/* Background - Animated pulsing rings when connected */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none -z-10">
-                <div className={`w-[500px] h-[500px] rounded-full bg-violet-500/5 ${isConnected ? 'animate-ping' : ''}`} />
-                <div className="absolute w-[800px] h-[800px] rounded-full border border-violet-500/10" />
+                {/* Inner pulsing ring */}
+                <motion.div
+                    className={`w-[400px] h-[400px] rounded-full ${isConnected ? 'bg-violet-500/10' : 'bg-zinc-500/5'}`}
+                    animate={isConnected ? {
+                        scale: [1, 1.05, 1],
+                        opacity: [0.1, 0.2, 0.1]
+                    } : {}}
+                    transition={{
+                        duration: 3,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                    }}
+                />
+                {/* Middle ring with pulse */}
+                <motion.div
+                    className={`absolute w-[600px] h-[600px] rounded-full border ${isConnected ? 'border-violet-500/30' : 'border-zinc-500/10'}`}
+                    animate={isConnected ? {
+                        scale: [1, 1.02, 1],
+                        opacity: [0.3, 0.5, 0.3]
+                    } : {}}
+                    transition={{
+                        duration: 4,
+                        repeat: Infinity,
+                        ease: "easeInOut",
+                        delay: 0.5
+                    }}
+                />
+                {/* Outer ring with slower pulse */}
+                <motion.div
+                    className={`absolute w-[800px] h-[800px] rounded-full border ${isConnected ? 'border-violet-500/20' : 'border-zinc-500/5'}`}
+                    animate={isConnected ? {
+                        scale: [1, 1.01, 1],
+                        opacity: [0.2, 0.3, 0.2]
+                    } : {}}
+                    transition={{
+                        duration: 5,
+                        repeat: Infinity,
+                        ease: "easeInOut",
+                        delay: 1
+                    }}
+                />
             </div>
 
             <div className="max-w-4xl w-full z-10 flex flex-col items-center gap-8">
-                {/* Status Indicator */}
-                <div className="flex flex-col items-center gap-4">
+                {/* Status Indicator with animation */}
+                <motion.div
+                    className="flex flex-col items-center gap-4"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                >
                     <div className="relative">
-                        <div className="w-24 h-24 rounded-full bg-white dark:bg-zinc-900 border-4 border-zinc-100 dark:border-zinc-800 flex items-center justify-center shadow-2xl">
-                            <Wifi className={`w-10 h-10 ${isConnected ? 'text-violet-500 animate-pulse' : 'text-zinc-400'}`} />
-                        </div>
+                        <motion.div
+                            className={`w-24 h-24 rounded-full bg-white dark:bg-zinc-900 border-4 flex items-center justify-center shadow-2xl ${isConnected ? 'border-violet-500/50 shadow-violet-500/30' : 'border-zinc-100 dark:border-zinc-800'}`}
+                            animate={isConnected ? {
+                                boxShadow: [
+                                    '0 25px 50px -12px rgba(139, 92, 246, 0.15)',
+                                    '0 25px 50px -12px rgba(139, 92, 246, 0.35)',
+                                    '0 25px 50px -12px rgba(139, 92, 246, 0.15)'
+                                ]
+                            } : {}}
+                            transition={{
+                                duration: 2,
+                                repeat: Infinity,
+                                ease: "easeInOut"
+                            }}
+                        >
+                            <Wifi className={`w-10 h-10 ${isConnected ? 'text-violet-500' : 'text-zinc-400'}`} />
+                        </motion.div>
                         {isConnected && (
                             <span className="absolute -top-1 -right-1 flex h-4 w-4">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -282,19 +386,26 @@ export default function Receive() {
                             Your device is visible to other devices on your AnyDrop network. Files sent to you will appear here.
                         </p>
                         {!isConnected && (
-                            <p className="text-xs text-amber-500 dark:text-amber-400 mt-2">
+                            <motion.p
+                                className="text-xs text-amber-500 dark:text-amber-400 mt-2"
+                                animate={{ opacity: [1, 0.5, 1] }}
+                                transition={{ duration: 1.5, repeat: Infinity }}
+                            >
                                 ⚠️ Connecting to transfer service...
-                            </p>
+                            </motion.p>
                         )}
                     </div>
 
-                    <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700">
+                    <motion.div
+                        className="flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700"
+                        whileHover={{ scale: 1.02 }}
+                    >
                         <Laptop className="w-4 h-4 text-zinc-500" />
                         <span className="text-sm font-mono font-bold text-zinc-700 dark:text-zinc-300">
                             {deviceName || 'This Device'}
                         </span>
-                    </div>
-                </div>
+                    </motion.div>
+                </motion.div>
 
                 {/* Incoming Files Queue */}
                 <div className="w-full space-y-4 max-h-[60vh] overflow-y-auto">

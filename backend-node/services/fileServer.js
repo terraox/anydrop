@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
-import busboy from 'busboy';
+// NOTE: busboy removed - using raw streaming with req.pipe(out) for /upload
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -51,9 +51,6 @@ const validatePairingCode = (deviceId, code) => {
   return stored.code === code;
 };
 
-// Note: We'll use busboy for streaming multipart parsing
-// Install with: npm install busboy
-
 /**
  * Create Express router for file server endpoints
  * @param {Function} broadcastProgress - Function to broadcast progress updates to WebSocket clients
@@ -68,7 +65,7 @@ export const createFileServerRouter = (broadcastProgress = null) => {
    */
   router.get('/pairing-code', async (req, res) => {
     let deviceId = req.headers['x-device-id'];
-    
+
     // If no header, try to get from deviceManager (for local requests)
     if (!deviceId) {
       try {
@@ -92,187 +89,141 @@ export const createFileServerRouter = (broadcastProgress = null) => {
   /**
    * POST /upload
    * Receive file stream from another device
-   * Requires pairing code in X-Pairing-Code header
-   * Uses streaming to avoid buffering entire file in memory
+   * 
+   * ❌ Do NOT use express.json
+   * ❌ Do NOT use multer
+   * ❌ Do NOT use busboy for this endpoint
+   * ✅ Use raw streaming: req.pipe(out)
+   * 
+   * Expected headers:
+   * - X-File-Name: Original filename
+   * - Content-Type: application/octet-stream
+   * - Content-Length: File size in bytes
+   * - X-Transfer-Id: Transfer ID from WebSocket signaling
    */
-  router.post('/upload', async (req, res) => {
-    try {
-      const deviceId = req.headers['x-device-id'];
-      const pairingCode = req.headers['x-pairing-code'];
-      const senderDeviceId = req.headers['x-sender-device-id'];
+  router.post('/upload', (req, res) => {
+    const fileName = req.headers['x-file-name'] || 'unnamed';
+    const transferId = req.headers['x-transfer-id'] || req.query.transferId || `transfer-${Date.now()}`;
+    const senderDeviceId = req.headers['x-sender-device-id'] || 'unknown';
+    const contentLength = parseInt(req.headers['content-length'] || '0', 10);
 
-      // Validate pairing code
-      if (!deviceId || !pairingCode) {
-        return res.status(400).json({ error: 'Device ID and pairing code required' });
+    console.log(`📤 RAW STREAMING upload starting:`, {
+      fileName,
+      transferId,
+      senderDeviceId,
+      contentLength: `${(contentLength / 1024 / 1024).toFixed(2)} MB`
+    });
+
+    // Sanitize filename
+    const timestamp = Date.now();
+    const sanitizedName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const savedFilename = `${timestamp}-${sanitizedName}`;
+    const filePath = path.join(uploadsDir, savedFilename);
+
+    // Create write stream
+    const out = fs.createWriteStream(filePath);
+
+    // Track progress
+    let receivedBytes = 0;
+    let lastProgressUpdate = 0;
+    const PROGRESS_UPDATE_INTERVAL = 100; // Update every 100ms
+
+    // Handle incoming data chunks for progress tracking
+    req.on('data', (chunk) => {
+      receivedBytes += chunk.length;
+
+      const now = Date.now();
+      if (broadcastProgress && (now - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL || receivedBytes === contentLength)) {
+        const percentage = contentLength > 0 ? ((receivedBytes / contentLength) * 100) : 0;
+
+        broadcastProgress({
+          type: 'PROGRESS',
+          transferId: transferId,
+          file: fileName,
+          receivedBytes: receivedBytes,
+          totalBytes: contentLength || receivedBytes,
+          percentage: parseFloat(percentage.toFixed(2))
+        });
+
+        lastProgressUpdate = now;
+      }
+    });
+
+    // MANDATORY: Pipe request directly to file (raw streaming)
+    req.pipe(out);
+
+    // Handle write stream errors
+    out.on('error', (err) => {
+      console.error('❌ Write stream error:', err);
+
+      if (broadcastProgress) {
+        broadcastProgress({
+          type: 'TRANSFER_ERROR',
+          transferId: transferId,
+          file: fileName,
+          error: err.message
+        });
       }
 
-      if (!validatePairingCode(deviceId, pairingCode)) {
-        console.warn(`❌ Invalid pairing code from ${senderDeviceId || 'unknown'}`);
-        return res.status(403).json({ error: 'Invalid or expired pairing code' });
+      if (!res.headersSent) {
+        res.status(500).json({ ok: false, error: 'File write failed', message: err.message });
+      }
+    });
+
+    // Handle request end (file fully received)
+    req.on('end', () => {
+      out.end();
+    });
+
+    // Handle write stream close (file saved to disk)
+    out.on('close', () => {
+      const fileSizeMB = (receivedBytes / 1024 / 1024).toFixed(2);
+      console.log(`✅ FILE SAVED: ${fileName} (${fileSizeMB} MB) -> ${savedFilename}`);
+
+      // Broadcast completion to WebSocket clients
+      if (broadcastProgress) {
+        broadcastProgress({
+          type: 'TRANSFER_COMPLETE',
+          transferId: transferId,
+          file: fileName,
+          filename: fileName,
+          savedAs: savedFilename,
+          size: receivedBytes,
+          downloadUrl: `/api/files/${savedFilename}`
+        });
       }
 
-      // Use busboy for streaming multipart parsing
-      const bb = busboy({ headers: req.headers });
-      
-      let originalName = 'unnamed';
-      let savedFilename = null;
-      let fileSize = 0;
-      let totalBytes = 0; // Expected total size (if provided in headers)
-      let receivedBytes = 0;
-      let writeStream = null;
-      let hasError = false;
-      let transferId = req.headers['x-transfer-id'] || `transfer-${Date.now()}`;
-      let lastProgressUpdate = 0;
-      const PROGRESS_UPDATE_INTERVAL = 100; // Update every 100ms
+      if (!res.headersSent) {
+        res.json({
+          ok: true,
+          status: 'success',
+          message: 'File received successfully',
+          filename: fileName,
+          size: receivedBytes,
+          savedAs: savedFilename,
+          downloadUrl: `/api/files/${savedFilename}`
+        });
+      }
+    });
 
-      // Get expected file size from headers if available
-      const contentLength = req.headers['content-length'];
-      if (contentLength) {
-        totalBytes = parseInt(contentLength, 10);
+    // Handle request errors
+    req.on('error', (err) => {
+      console.error('❌ Request stream error:', err);
+      out.destroy();
+
+      if (broadcastProgress) {
+        broadcastProgress({
+          type: 'TRANSFER_ERROR',
+          transferId: transferId,
+          file: fileName,
+          error: err.message
+        });
       }
 
-      bb.on('file', (name, file, info) => {
-        originalName = info.filename || 'unnamed';
-        const timestamp = Date.now();
-        const sanitizedName = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
-        savedFilename = `${timestamp}-${sanitizedName}`;
-        const filePath = path.join(uploadsDir, savedFilename);
-
-        // Get file size from Content-Length header if available
-        if (info.encoding && info.mimeType) {
-          // File info available
-        }
-
-        // Create write stream for file
-        writeStream = fs.createWriteStream(filePath);
-
-        writeStream.on('error', (err) => {
-          console.error('❌ Write stream error:', err);
-          hasError = true;
-          
-          // Broadcast error to WebSocket clients
-          if (broadcastProgress) {
-            broadcastProgress({
-              type: 'TRANSFER_ERROR',
-              transferId: transferId,
-              file: originalName,
-              error: err.message
-            });
-          }
-          
-          if (!res.headersSent) {
-            res.status(500).json({ error: 'File write failed', message: err.message });
-          }
-        });
-
-        // Stream file data directly to disk (no buffering)
-        // Track progress and emit updates via WebSocket
-        file.on('data', (chunk) => {
-          if (!hasError && writeStream) {
-            receivedBytes += chunk.length;
-            fileSize = receivedBytes;
-            writeStream.write(chunk);
-            
-            // Emit progress updates (throttled to avoid flooding)
-            const now = Date.now();
-            if (broadcastProgress && (now - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL || receivedBytes === totalBytes)) {
-              const percentage = totalBytes > 0 ? ((receivedBytes / totalBytes) * 100).toFixed(2) : '0.00';
-              
-              broadcastProgress({
-                type: 'PROGRESS',
-                transferId: transferId,
-                file: originalName,
-                receivedBytes: receivedBytes,
-                totalBytes: totalBytes || receivedBytes, // Use receivedBytes as fallback
-                percentage: parseFloat(percentage)
-              });
-              
-              lastProgressUpdate = now;
-            }
-          }
-        });
-
-        file.on('end', () => {
-          if (writeStream && !hasError) {
-            writeStream.end();
-          }
-        });
-
-        file.on('error', (err) => {
-          console.error('❌ File stream error:', err);
-          hasError = true;
-          if (writeStream) {
-            writeStream.destroy();
-          }
-          if (!res.headersSent) {
-            res.status(500).json({ error: 'File stream error', message: err.message });
-          }
-        });
-      });
-
-      bb.on('finish', () => {
-        if (hasError) {
-          return;
-        }
-
-        // Wait for write stream to finish
-        if (writeStream) {
-          writeStream.on('close', () => {
-            const fileSizeMB = (fileSize / 1024 / 1024).toFixed(2);
-            console.log(`📦 File received: ${originalName} (${fileSizeMB}MB) from ${senderDeviceId || 'unknown'}`);
-
-            // Broadcast completion to WebSocket clients
-            if (broadcastProgress) {
-              broadcastProgress({
-                type: 'TRANSFER_COMPLETE',
-                transferId: transferId,
-                file: originalName,
-                filename: originalName,
-                savedAs: savedFilename,
-                size: fileSize,
-                downloadUrl: `/api/files/${savedFilename}`
-              });
-            }
-
-            // Cleanup pairing code after successful transfer
-            pairingCodes.delete(deviceId);
-
-            if (!res.headersSent) {
-              res.json({
-                status: 'success',
-                message: 'File received successfully',
-                filename: originalName,
-                size: fileSize,
-                savedAs: savedFilename,
-                downloadUrl: `/api/files/${savedFilename}`
-              });
-            }
-          });
-        } else {
-          // No file was received
-          if (!res.headersSent) {
-            res.status(400).json({ error: 'No file uploaded' });
-          }
-        }
-      });
-
-      bb.on('error', (error) => {
-        console.error('❌ Busboy error:', error);
-        hasError = true;
-        if (writeStream) {
-          writeStream.destroy();
-        }
-        if (!res.headersSent) {
-          res.status(500).json({ error: 'File upload failed', message: error.message });
-        }
-      });
-
-      // Pipe request to busboy for streaming parsing
-      req.pipe(bb);
-    } catch (error) {
-      console.error('❌ File upload error:', error);
-      res.status(500).json({ error: 'File upload failed', message: error.message });
-    }
+      if (!res.headersSent) {
+        res.status(500).json({ ok: false, error: 'Upload failed', message: err.message });
+      }
+    });
   });
 
   /**
@@ -290,9 +241,9 @@ export const createFileServerRouter = (broadcastProgress = null) => {
 
     const stat = fs.statSync(filePath);
     const fileStream = fs.createReadStream(filePath);
-    
+
     // Extract original filename from saved filename (format: timestamp-originalname)
-    const originalFilename = filename.includes('-') 
+    const originalFilename = filename.includes('-')
       ? filename.substring(filename.indexOf('-') + 1)
       : filename;
 
@@ -305,7 +256,7 @@ export const createFileServerRouter = (broadcastProgress = null) => {
     // Stream file to client (for mobile browser downloads)
     fileStream.pipe(res);
   });
-  
+
   /**
    * GET /files/:filename (legacy endpoint, redirects to /api/files/:filename)
    */

@@ -254,19 +254,32 @@ export default function BentoOrbit() {
     const [pendingTransferFiles, setPendingTransferFiles] = useState([]);
     const [selectedTargetDevice, setSelectedTargetDevice] = useState(null);
 
-    const handleDeviceSelect = (device) => {
+    const handleDeviceSelect = async (device) => {
         setIsDeviceModalOpen(false);
         setSelectedTargetDevice(device);
 
         if (pendingTransferFiles.length > 0) {
-            toast.success(`Broadcasting to ${device.name}...`);
-            pendingTransferFiles.forEach(file => {
-                TransferService.enqueueFile(
-                    device.id || device.name,
-                    file.fileObject,
-                    file.id
-                );
-            });
+            toast.success(`Sending ${pendingTransferFiles.length} file(s) to ${device.name}...`);
+            
+            // Use LocalFileTransferService for local file transfers
+            const LocalFileTransferService = (await import('../../services/localFileTransfer.service')).default;
+            
+            // Send files sequentially
+            for (const file of pendingTransferFiles) {
+                try {
+                    const transferId = await LocalFileTransferService.sendFile(
+                        file.fileObject,
+                        device.ip,
+                        device.port || 8080,
+                        localStorage.getItem('anydrop_web_device_id') || 'web-client'
+                    );
+                    console.log('✅ File transfer initiated:', transferId);
+                } catch (error) {
+                    console.error('❌ Failed to send file:', error);
+                    toast.error(`Failed to send ${file.name}: ${error.message}`);
+                }
+            }
+            
             // Clear pending after initiating
             setPendingTransferFiles([]);
         }
