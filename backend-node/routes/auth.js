@@ -12,11 +12,11 @@ const generateAccessKey = () => {
     'brave', 'clear', 'fresh', 'grand', 'quick', 'sharp', 'solid', 'sweet', 'warm', 'wild'];
   const nouns = ['dolphin', 'eagle', 'tiger', 'ocean', 'river', 'mountain', 'forest', 'cloud', 'star', 'moon',
     'sun', 'wave', 'breeze', 'crystal', 'flame', 'storm', 'light', 'shadow', 'spark', 'pearl'];
-  
+
   const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
   const noun = nouns[Math.floor(Math.random() * nouns.length)];
   const number = Math.floor(Math.random() * 99) + 1;
-  
+
   return `${adjective}-${noun}-${number}`;
 };
 
@@ -256,4 +256,42 @@ router.post('/forgot/reset', async (req, res) => {
   }
 });
 
+// Change password (authenticated users)
+router.post('/change-password', async (req, res) => {
+  try {
+    const { email, currentPassword, newPassword } = req.body;
+
+    if (!email || !currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Email, current password, and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+
+    const user = await User.findOne({ where: { email: email.trim() } });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Verify current password
+    const isValid = await user.comparePassword(currentPassword);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    // Update password (will be hashed by hook)
+    user.password = newPassword;
+    await user.save();
+
+    console.log(`✅ Password changed for ${email}`);
+    res.json({ message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
 export default router;
+
