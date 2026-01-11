@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import { WebSocketServer } from 'ws';
 import { sequelize } from './models/index.js';
 import { corsOptions } from './middleware/cors.js';
 import rateLimit from 'express-rate-limit';
@@ -15,37 +16,88 @@ import identityRoutes from './routes/identity.js';
 import deviceRoutes from './routes/device.js';
 import adminRoutes from './routes/admin.js';
 
-// WebSocket handlers
+// WebSocket handlers (STOMP-based for legacy)
 import { handleTransferConnection, getRegisteredDevices } from './websocket/transferHandler.js';
 import { setRegisteredDevices } from './routes/identity.js';
-import { startAdvertising } from './services/discoveryService.js';
+
+// Local file transfer modules
+import { startAdvertising, stopAdvertising } from './services/discoveryService.js';
+import { createFileServerRouter, generatePairingCode } from './services/fileServer.js';
+import deviceManager from './services/deviceManager.js';
+import mdnsBrowser from './services/mdnsBrowser.js';
 import { ServerSettings } from './models/index.js';
 
 dotenv.config();
 
 const app = express();
 const server = createServer(app);
+
+// Socket.IO for legacy WebSocket (STOMP-based)
 const io = new Server(server, {
   cors: corsOptions,
   transports: ['websocket', 'polling']
 });
 
+// Plain WebSocket server for local file transfer signaling (on /ws path)
+const wss = new WebSocketServer({ server, path: '/ws' });
+const connectedClients = new Set();
+
+// Broadcast function for progress updates to all connected clients
+function broadcastToClients(message) {
+  const messageStr = typeof message === 'string' ? message : JSON.stringify(message);
+  let sentCount = 0;
+  connectedClients.forEach(client => {
+    if (client.readyState === 1) { // WebSocket.OPEN
+      client.send(messageStr);
+      sentCount++;
+    }
+  });
+  if (sentCount > 0) {
+    console.log(`📢 Broadcast to ${sentCount} clients`);
+  }
+}
+
 const PORT = process.env.PORT || 8080;
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100
 });
 
 app.use(limiter);
-app.use(cors(corsOptions));
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
+
+// ⚠️ IMPORTANT: Mount file server routes BEFORE express.json()
+// This ensures /upload receives raw streaming (application/octet-stream)
+app.use('/', createFileServerRouter(broadcastToClients));
+
+// Now add JSON parsing for other routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Device identification endpoint (for mobile discovery)
+app.get('/api/identify', async (req, res) => {
+  const deviceId = deviceManager.getDeviceId();
+  const deviceName = deviceManager.getDeviceName();
+  console.log(`📱 /api/identify called - returning: { deviceId: '${deviceId}', deviceName: '${deviceName}' }`);
+  res.json({
+    app: 'AnyDrop',
+    name: deviceName,
+    id: deviceId,
+    deviceId: deviceId,
+    icon: 'laptop',
+    type: 'DESKTOP',
+    version: '1.0.0'
+  });
 });
 
 // API Routes
@@ -56,18 +108,143 @@ app.use('/api', identityRoutes);
 app.use('/api/device', deviceRoutes);
 app.use('/admin', adminRoutes);
 
-// Initialize WebSocket handlers
+// Device discovery endpoints
+app.get('/api/devices', (req, res) => {
+  const devices = mdnsBrowser.getDevicesList();
+  res.json({ devices });
+});
+
+app.get('/api/device/info', (req, res) => {
+  res.json({
+    success: true,
+    device: deviceManager.getDeviceInfo()
+  });
+});
+
+app.put('/api/device/name', express.json(), async (req, res) => {
+  const { name } = req.body;
+  if (!name) {
+    return res.status(400).json({ error: 'Name is required' });
+  }
+  const success = await deviceManager.setDeviceName(name);
+  if (success) {
+    res.json({
+      success: true,
+      device: deviceManager.getDeviceInfo()
+    });
+  } else {
+    res.status(500).json({ error: 'Failed to update device name' });
+  }
+});
+
+// Pairing code endpoint
+app.get('/api/pairing-code', async (req, res) => {
+  const deviceId = deviceManager.getDeviceId();
+  if (!deviceId) {
+    return res.status(500).json({ error: 'Device not initialized' });
+  }
+  const code = generatePairingCode(deviceId);
+  res.json({ code, expiresIn: 300 });
+});
+
+// Initialize Socket.IO handlers (legacy)
 handleTransferConnection(io);
 
-// Update registered devices periodically for /api/devices endpoint
+// Update registered devices periodically
 setInterval(() => {
   setRegisteredDevices(getRegisteredDevices());
 }, 5000);
 
+// Plain WebSocket handler for local file transfer signaling
+wss.on('connection', (ws, req) => {
+  const clientIp = req.socket.remoteAddress;
+  console.log(`🔌 WebSocket client connected from ${clientIp}`);
+  connectedClients.add(ws);
+
+  // Send READY handshake
+  ws.send(JSON.stringify({ type: 'READY', role: 'receiver' }));
+  console.log(`✅ Sent READY handshake to ${clientIp}`);
+
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message.toString());
+      console.log('📨 WebSocket message:', data);
+
+      if (data.type === 'FILE_METADATA') {
+        const files = data.files || [{ name: data.fileName, size: data.size }];
+        const senderName = data.senderName || data.senderId || 'Unknown Device';
+        console.log(`📤 File metadata received: ${files.length} file(s) from ${senderName}`);
+
+        const metadataMessage = JSON.stringify({
+          type: 'FILE_METADATA',
+          transferId: data.transferId,
+          files: files,
+          senderId: data.senderId,
+          senderName: senderName,
+          timestamp: Date.now()
+        });
+
+        connectedClients.forEach(client => {
+          if (client.readyState === 1) client.send(metadataMessage);
+        });
+
+      } else if (data.type === 'ACCEPT') {
+        console.log('✅ ACCEPT received for transfer:', data.transferId);
+        const acceptMessage = JSON.stringify({
+          type: 'ACCEPT',
+          transferId: data.transferId
+        });
+        console.log(`📢 Broadcasting ACCEPT to ${connectedClients.size} clients`);
+        let sentCount = 0;
+        connectedClients.forEach(client => {
+          if (client.readyState === 1) {
+            client.send(acceptMessage);
+            sentCount++;
+          }
+        });
+        console.log(`📢 ACCEPT sent to ${sentCount} clients`);
+
+      } else if (data.type === 'REJECT') {
+        console.log('❌ REJECT received for transfer:', data.transferId);
+        const rejectMessage = JSON.stringify({
+          type: 'REJECT',
+          transferId: data.transferId
+        });
+        connectedClients.forEach(client => {
+          if (client.readyState === 1) client.send(rejectMessage);
+        });
+
+      } else if (data.type === 'PROGRESS') {
+        const progressMessage = JSON.stringify({
+          type: 'PROGRESS',
+          transferId: data.transferId,
+          file: data.file,
+          percentage: data.percentage,
+          receivedBytes: data.receivedBytes,
+          totalBytes: data.totalBytes
+        });
+        connectedClients.forEach(client => {
+          if (client.readyState === 1) client.send(progressMessage);
+        });
+      }
+    } catch (error) {
+      console.error('❌ WebSocket message error:', error);
+    }
+  });
+
+  ws.on('error', (error) => {
+    console.error('❌ WebSocket error:', error);
+  });
+
+  ws.on('close', () => {
+    console.log(`🔌 WebSocket client disconnected from ${clientIp}`);
+    connectedClients.delete(ws);
+  });
+});
+
 // Initialize database and start server
 const startServer = async () => {
   try {
-    // Test database connection with better error handling
     console.log('🔌 Attempting to connect to database...');
     console.log(`   Host: ${process.env.DB_HOST || 'localhost'}`);
     console.log(`   Database: ${process.env.DB_NAME || 'anydrop'}`);
@@ -76,25 +253,31 @@ const startServer = async () => {
     await sequelize.authenticate();
     console.log('✅ Database connection established');
 
-    // Sync database models (creates tables if they don't exist)
     await sequelize.sync();
     console.log('✅ Database models synced');
 
-    // Initialize default data
     await initializeDefaultData();
+
+    // Initialize device manager
+    await deviceManager.initialize();
 
     server.listen(PORT, '0.0.0.0', async () => {
       console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📡 WebSocket server ready`);
+      console.log(`📡 WebSocket server ready (Socket.IO + plain WebSocket at /ws)`);
+      console.log(`📁 File transfer endpoint: /upload`);
+      console.log(`🔐 Auth endpoint: /api/auth/login`);
 
-      // Start Bonjour advertising
+      // Start mDNS advertising
       try {
-        const deviceNameSetting = await ServerSettings.findOne({ where: { key: 'device_name' } });
-        const deviceName = deviceNameSetting?.value || 'AnyDrop-Desktop';
+        const deviceName = deviceManager.getDeviceName();
         startAdvertising(PORT, deviceName);
+        console.log(`📡 mDNS advertising: ${deviceName}`);
       } catch (e) {
-        console.error('⚠️ Failed to start Bonjour advertising:', e);
+        console.error('⚠️ Failed to start mDNS advertising:', e);
       }
+
+      // Start mDNS browser for device discovery
+      mdnsBrowser.startBrowsing();
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error.message);
@@ -105,7 +288,6 @@ const startServer = async () => {
       console.error('   2. Verify database credentials in .env file');
       console.error('   3. Ensure the database user exists');
       console.error('   4. Check network connectivity to database host');
-      console.error(`\n   Current config: ${process.env.DB_USER}@${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`);
     }
 
     console.error('\n💡 Tip: Check backend-node/.env file for correct database credentials');
@@ -115,9 +297,8 @@ const startServer = async () => {
 
 const initializeDefaultData = async () => {
   const { User, Plan, ServerSettings } = await import('./models/index.js');
-  const bcrypt = (await import('bcryptjs')).default;
 
-  // Initialize device name if not set or if it's the old default
+  // Initialize device name if not set
   const deviceNameSetting = await ServerSettings.findOne({ where: { key: 'device_name' } });
   if (!deviceNameSetting || deviceNameSetting.value === 'AnyDrop-Server') {
     if (deviceNameSetting) {
@@ -131,18 +312,8 @@ const initializeDefaultData = async () => {
   // Initialize plans
   const planCount = await Plan.count();
   if (planCount === 0) {
-    await Plan.create({
-      name: 'SCOUT',
-      speedLimit: 500000,
-      fileSizeLimit: 50000000
-    });
-
-    await Plan.create({
-      name: 'TITAN',
-      speedLimit: -1,
-      fileSizeLimit: -1
-    });
-
+    await Plan.create({ name: 'SCOUT', speedLimit: 500000, fileSizeLimit: 50000000 });
+    await Plan.create({ name: 'TITAN', speedLimit: -1, fileSizeLimit: -1 });
     console.log('✅ Plans initialized');
   }
 
@@ -150,7 +321,6 @@ const initializeDefaultData = async () => {
   const adminUser = await User.findOne({ where: { email: 'admin@anydrop.com' } });
   if (!adminUser) {
     const titanPlan = await Plan.findOne({ where: { name: 'TITAN' } });
-
     await User.create({
       username: 'admin',
       email: 'admin@anydrop.com',
@@ -158,10 +328,8 @@ const initializeDefaultData = async () => {
       role: 'ROLE_ADMIN',
       planId: titanPlan.id
     });
-
     console.log('✅ Default admin user created: admin@anydrop.com / admin123');
   } else {
-    // Ensure admin password and role are correct
     adminUser.password = 'admin123';
     adminUser.role = 'ROLE_ADMIN';
     await adminUser.save();
@@ -172,6 +340,19 @@ const initializeDefaultData = async () => {
 // Handle graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully...');
+  stopAdvertising();
+  mdnsBrowser.cleanup();
+  await sequelize.close();
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT received, shutting down gracefully...');
+  stopAdvertising();
+  mdnsBrowser.cleanup();
   await sequelize.close();
   server.close(() => {
     console.log('Server closed');
