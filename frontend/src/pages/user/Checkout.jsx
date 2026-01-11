@@ -13,6 +13,7 @@ export default function Checkout() {
     const [isAnnual, setIsAnnual] = useState(true);
     const [couponCode, setCouponCode] = useState('');
     const [isVerifying, setIsVerifying] = useState(false);
+    const [discount, setDiscount] = useState(null); // { percent: 10, code: 'SAVE10' }
 
     // Payment State
     const [cardholderName, setCardholderName] = useState('');
@@ -20,26 +21,54 @@ export default function Checkout() {
     const [expiryDate, setExpiryDate] = useState('');
     const [cvc, setCvc] = useState('');
 
-    const handleApplyCoupon = () => {
-        setIsVerifying(true);
+    const [monthlyPrice, setMonthlyPrice] = useState(499);
+    const [annualPrice, setAnnualPrice] = useState(4999);
 
-        // MOCK VALIDATION
-        setTimeout(() => {
-            // Allow empty coupon if payment details are filled (mock payment)
-            const isPaymentFilled = cardholderName && cardNumber && expiryDate && cvc;
-            const isCouponValid = couponCode.toUpperCase() === 'PRO2025' || couponCode.toUpperCase() === 'ANYDROP';
-
-            if (isCouponValid) {
-                toast.success("Coupon Applied! Welcome to Pro.");
-                finishCheckout();
-            } else if (isPaymentFilled) {
-                toast.success("Payment Successful! Welcome to Pro.");
-                finishCheckout();
-            } else {
-                toast.error("Please enter valid payment details or a promo code.");
-                setIsVerifying(false);
+    useEffect(() => {
+        const fetchPlanPrice = async () => {
+            try {
+                const res = await api.get('/api/plans');
+                const pro = res.data.pro;
+                if (pro && pro.monthlyPrice) {
+                    const mPrice = parseFloat(pro.monthlyPrice);
+                    setMonthlyPrice(mPrice);
+                    // Calculate annual price: Monthly * 12 * 0.83 (17% off approx)
+                    // Or just use Monthly * 10 (common SaaS heuristic for 2 months free)
+                    // Let's stick to the UI "Save 17%" logic:
+                    // 17% off annual means: Annual = Monthly * 12 * (1 - 0.17) = Monthly * 9.96
+                    // Rounding to nearest 9 or appropriate integer.
+                    // For 9.99 -> 99.99 (x10).
+                    setAnnualPrice(Math.round(mPrice * 10));
+                }
+            } catch (error) {
+                console.error("Failed to fetch plan price", error);
             }
-        }, 2000);
+        };
+        fetchPlanPrice();
+    }, []);
+
+    const basePrice = isAnnual ? annualPrice : monthlyPrice;
+    const finalPrice = discount
+        ? Math.round(basePrice * (1 - discount.percent / 100))
+        : basePrice;
+
+    const handleApplyCoupon = async () => {
+        if (!couponCode) return;
+        setIsVerifying(true);
+        try {
+            const response = await api.post('/api/coupons/verify', { code: couponCode });
+            setDiscount({
+                percent: response.data.discountPercent,
+                code: response.data.code
+            });
+            toast.success(`Coupon applied! ${response.data.discountPercent}% off.`);
+        } catch (error) {
+            console.error("Coupon error:", error);
+            setDiscount(null);
+            toast.error(error.response?.data?.error || "Invalid coupon code");
+        } finally {
+            setIsVerifying(false);
+        }
     };
 
     const finishCheckout = () => {
@@ -49,11 +78,10 @@ export default function Checkout() {
         }, 1000);
     };
 
-    const isFormValid = (cardholderName && cardNumber && expiryDate && cvc) || couponCode;
+    const isFormValid = (cardholderName && cardNumber && expiryDate && cvc);
 
     return (
         <div className="min-h-screen bg-zinc-50 dark:bg-black transition-colors duration-300 flex flex-col">
-
             {/* Header */}
             <header className="flex h-16 items-center border-b border-zinc-200/50 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-xl dark:border-white/5 px-6 lg:px-12 sticky top-0 z-50">
                 <Link to="/pricing" className="flex items-center gap-2 text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors mr-auto">
@@ -66,7 +94,6 @@ export default function Checkout() {
 
             <div className="flex-1 flex items-center justify-center p-6">
                 <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-start">
-
                     {/* Left Column: Plan Details */}
                     <div className="space-y-8 lg:sticky lg:top-32">
                         <div>
@@ -95,11 +122,23 @@ export default function Checkout() {
                             <div className="flex items-center justify-between mb-6 pb-6 border-b border-zinc-100 dark:border-white/5">
                                 <div>
                                     <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Pro Plan ({isAnnual ? 'Yearly' : 'Monthly'})</h3>
-                                    <p className="text-sm text-zinc-500">Billed {isAnnual ? 'annually' : 'monthly'} at ₹{isAnnual ? '4999' : '499'}</p>
+                                    <p className="text-sm text-zinc-500">Billed {isAnnual ? 'annually' : 'monthly'} at ₹{basePrice}</p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-2xl font-bold text-violet-600">₹{isAnnual ? '4999' : '499'}</p>
-                                    {isAnnual && <p className="text-xs text-emerald-500 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-full inline-block mt-1">Save 17%</p>}
+                                    {discount ? (
+                                        <>
+                                            <p className="text-sm text-zinc-400 line-through">₹{basePrice}</p>
+                                            <p className="text-2xl font-bold text-emerald-500">₹{finalPrice}</p>
+                                            <p className="text-xs text-emerald-500 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-full inline-block mt-1">
+                                                {discount.code} applied (-{discount.percent}%)
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p className="text-2xl font-bold text-violet-600">₹{basePrice}</p>
+                                            {isAnnual && <p className="text-xs text-emerald-500 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-full inline-block mt-1">Save 17%</p>}
+                                        </>
+                                    )}
                                 </div>
                             </div>
 
@@ -226,7 +265,7 @@ export default function Checkout() {
                                     </>
                                 ) : (
                                     <>
-                                        Pay ₹{isAnnual ? '4999' : '499'} & Subscribe <Sparkles className="w-4 h-4" />
+                                        Pay ₹{finalPrice} & Subscribe <Sparkles className="w-4 h-4" />
                                     </>
                                 )}
                             </button>

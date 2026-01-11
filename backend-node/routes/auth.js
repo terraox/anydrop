@@ -103,11 +103,11 @@ router.post('/login', async (req, res) => {
 
     // Check if account is enabled
     if (!user.enabled) {
-      return res.status(403).json({ error: 'Your account is banned. Please contact the administrator.' });
+      return res.status(403).json({ error: 'Your account is banned. Please contact the administrator at admin@anydrop.com.' });
     }
 
     if (!user.accountNonLocked) {
-      return res.status(403).json({ error: 'Your account is banned. Please contact the administrator.' });
+      return res.status(403).json({ error: 'Your account is banned. Please contact the administrator at admin@anydrop.com.' });
     }
 
     // Verify password

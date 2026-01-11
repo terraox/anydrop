@@ -1,8 +1,7 @@
 # Dependencies
 node_modules/
 **/node_modules/
-package-lock.json
-**/package-lock.json
+# Keep package-lock.json tracked!
 
 # Environment variables
 .env
@@ -64,10 +63,6 @@ backend/.gradle/
 backend/.mvn/
 backend/mvnw
 backend/mvnw.cmd
-
-# Landing page (if not needed)
-landing-page/
-landingpage/
 
 # Uploads and user-generated content
 **/uploads/

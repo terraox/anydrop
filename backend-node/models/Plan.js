@@ -19,6 +19,22 @@ const Plan = sequelize.define('Plan', {
   fileSizeLimit: {
     type: DataTypes.BIGINT,
     defaultValue: -1 // -1 means unlimited
+  },
+  dailyTransferLimit: {
+    type: DataTypes.INTEGER,
+    defaultValue: -1 // -1 means unlimited
+  },
+  monthlyPrice: {
+    type: DataTypes.FLOAT,
+    defaultValue: 0.0
+  },
+  storageLimitGB: {
+    type: DataTypes.INTEGER,
+    defaultValue: 1
+  },
+  priorityProcessing: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   }
 }, {
   tableName: 'plans',

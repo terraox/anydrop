@@ -189,6 +189,60 @@ router.delete('/coupons/:id', async (req, res) => {
   }
 });
 
+// Plan Configuration
+router.get('/plans/config', async (req, res) => {
+  try {
+    const plans = await Plan.findAll();
+    const config = {};
+    // Ensure we send back lowercase keys as expected by frontend (free, pro)
+    plans.forEach(plan => {
+      const plainPlan = plan.get({ plain: true });
+      // Convert Bytes to MB for frontend
+      if (plainPlan.fileSizeLimit !== -1) {
+        plainPlan.maxFileSizeMB = Math.floor(plainPlan.fileSizeLimit / (1024 * 1024));
+      } else {
+        plainPlan.maxFileSizeMB = -1;
+      }
+      config[plan.name.toLowerCase()] = plainPlan;
+    });
+    res.json(config);
+  } catch (error) {
+    console.error('Get plans config error:', error);
+    res.status(500).json({ error: 'Failed to get plan config' });
+  }
+});
+
+router.put('/plans/config', async (req, res) => {
+  try {
+    const { planName, maxFileSizeMB, ...otherUpdates } = req.body;
+    if (!planName) {
+      return res.status(400).json({ error: 'Plan name is required' });
+    }
+    const plan = await Plan.findOne({ where: { name: planName } });
+
+    if (!plan) {
+      return res.status(404).json({ error: 'Plan not found' });
+    }
+
+    const updates = { ...otherUpdates };
+
+    // Convert MB to Bytes for storage
+    if (maxFileSizeMB !== undefined) {
+      if (maxFileSizeMB === -1) {
+        updates.fileSizeLimit = -1;
+      } else {
+        updates.fileSizeLimit = maxFileSizeMB * 1024 * 1024;
+      }
+    }
+
+    await plan.update(updates);
+    res.json(plan);
+  } catch (error) {
+    console.error('Update plan config error:', error);
+    res.status(500).json({ error: 'Failed to update plan config' });
+  }
+});
+
 // System health
 router.get('/health', (req, res) => {
   res.json({

@@ -6,6 +6,8 @@ import path from 'path';
 import fs from 'fs';
 import { lookup } from 'mime-types';
 
+import { Op } from 'sequelize';
+
 const router = express.Router();
 
 router.post('/upload', authenticate, upload.single('file'), async (req, res) => {
@@ -15,6 +17,37 @@ router.post('/upload', authenticate, upload.single('file'), async (req, res) => 
     }
 
     const user = req.user;
+
+    // 1. Check File Size Limit
+    if (user.plan && user.plan.fileSizeLimit !== -1) {
+      if (req.file.size > user.plan.fileSizeLimit) {
+        console.log(`❌ Upload rejected: File size ${req.file.size} exceeds limit ${user.plan.fileSizeLimit}`);
+        return res.status(403).json({
+          error: `File too large. Your plan limit is ${(user.plan.fileSizeLimit / (1024 * 1024)).toFixed(0)}MB.`
+        });
+      }
+    }
+
+    // 2. Check Daily Transfer Limit
+    if (user.plan && user.plan.dailyTransferLimit !== -1) {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const count = await HistoryItem.count({
+        where: {
+          userId: user.id,
+          createdAt: { [Op.gte]: startOfDay }
+        }
+      });
+
+      if (count >= user.plan.dailyTransferLimit) {
+        console.log(`❌ Upload rejected: Daily limit reached for user ${user.email} (${count}/${user.plan.dailyTransferLimit})`);
+        return res.status(403).json({
+          error: `Daily transfer limit reached (${user.plan.dailyTransferLimit}/day). Upgrade for unlimited!`
+        });
+      }
+    }
+
     const historyItem = await storeFile(req.file, user);
 
     res.json(historyItem);

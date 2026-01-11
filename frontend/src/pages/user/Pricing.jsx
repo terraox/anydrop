@@ -16,6 +16,8 @@ export default function Pricing() {
     const [freeLimit, setFreeLimit] = useState(3);
     const [freeMaxFileSize, setFreeMaxFileSize] = useState(10);
     const [proMaxFileSize, setProMaxFileSize] = useState(100);
+    const [monthlyPrice, setMonthlyPrice] = useState(499);
+    const [annualPrice, setAnnualPrice] = useState(4999);
 
     // UI State
     const [isAnnual, setIsAnnual] = useState(false);
@@ -28,26 +30,27 @@ export default function Pricing() {
     const fetchConfig = async () => {
         setIsLoading(true);
         try {
-            const response = await api.get('/tools/config');
-            const configs = response.data;
+            // Fetch from new plans API to get Admin-configured values
+            const response = await api.get('/api/plans');
+            const data = response.data;
 
-            configs.forEach(config => {
-                switch (config.configKey) {
-                    case 'FREE_TIER_LIMIT':
-                        setFreeLimit(parseInt(config.configValue) || 3);
-                        break;
-                    case 'FREE_MAX_FILE_SIZE':
-                        setFreeMaxFileSize(parseInt(config.configValue) || 10);
-                        break;
-                    case 'PRO_MAX_FILE_SIZE':
-                        setProMaxFileSize(parseInt(config.configValue) || 100);
-                        break;
-                    default:
-                        break;
+            if (data.free) {
+                setFreeLimit(data.free.dailyTransferLimit || 3);
+                setFreeMaxFileSize(data.free.maxFileSizeMB || 10);
+            }
+
+            if (data.pro) {
+                setProMaxFileSize(data.pro.maxFileSizeMB || 100);
+                if (data.pro.monthlyPrice) {
+                    const mPrice = parseFloat(data.pro.monthlyPrice);
+                    setMonthlyPrice(mPrice);
+                    // Same logic as Checkout.jsx
+                    setAnnualPrice(Math.round(mPrice * 10));
                 }
-            });
+            }
         } catch (error) {
-            console.error('Failed to fetch config', error);
+            console.error('Failed to fetch plan config', error);
+            toast.error("Could not load pricing details");
         } finally {
             setIsLoading(false);
         }
@@ -117,11 +120,11 @@ export default function Pricing() {
                                     <span className="text-sm font-semibold leading-6 text-zinc-700 dark:text-zinc-400">/{isAnnual ? 'year' : 'month'}</span>
                                 </p>
                                 <ul role="list" className="mt-8 space-y-3 text-sm leading-6 text-zinc-700 dark:text-zinc-400">
-                                    <li className="flex gap-x-3"><Check className="h-6 w-5 flex-none text-violet-600" /> {freeLimit} Tasks per day</li>
+                                    <li className="flex gap-x-3"><Check className="h-6 w-5 flex-none text-violet-600" /> {freeLimit} Transfers per day</li>
                                     <li className="flex gap-x-3"><Check className="h-6 w-5 flex-none text-violet-600" /> {freeMaxFileSize}MB Max File Size</li>
-                                    <li className="flex gap-x-3"><Check className="h-6 w-5 flex-none text-violet-600" /> Standard Processing Speed</li>
-                                    <li className="flex gap-x-3 text-zinc-500 dark:text-zinc-600"><X className="h-6 w-5 flex-none" /> No Advanced Tools</li>
-                                    <li className="flex gap-x-3 text-zinc-500 dark:text-zinc-600"><X className="h-6 w-5 flex-none" /> Ads Supported</li>
+                                    <li className="flex gap-x-3"><Check className="h-6 w-5 flex-none text-violet-600" /> Local Network Transfer</li>
+                                    <li className="flex gap-x-3 text-zinc-500 dark:text-zinc-600"><X className="h-6 w-5 flex-none" /> Files expire in 24h</li>
+                                    <li className="flex gap-x-3 text-zinc-500 dark:text-zinc-600"><X className="h-6 w-5 flex-none" /> Standard Speed</li>
                                 </ul>
                                 {isAuthenticated && isFree ? (
                                     <button disabled className="mt-8 block w-full rounded-md py-2 px-3 text-center text-sm font-semibold leading-6 text-zinc-500 bg-zinc-100 dark:bg-zinc-800 cursor-not-allowed">
@@ -152,16 +155,16 @@ export default function Pricing() {
                                 <p className="mt-4 text-sm leading-6 text-zinc-600 dark:text-zinc-300">For power users who need professional tools.</p>
                                 <p className="mt-6 flex items-baseline gap-x-1">
                                     <span className="text-4xl font-bold tracking-tight text-zinc-900 dark:text-white">
-                                        ₹<NumberTicker value={isAnnual ? 4999 : 499} className="text-zinc-900 dark:text-white" />
+                                        ₹<NumberTicker value={isAnnual ? annualPrice : monthlyPrice} className="text-zinc-900 dark:text-white" />
                                     </span>
                                     <span className="text-sm font-semibold leading-6 text-zinc-600 dark:text-zinc-300">/{isAnnual ? 'year' : 'month'}</span>
                                 </p>
                                 <ul role="list" className="mt-8 space-y-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                                    <li className="flex gap-x-3"><Check className="h-6 w-5 flex-none text-violet-600 dark:text-violet-400" /> Unlimited Tasks</li>
+                                    <li className="flex gap-x-3"><Check className="h-6 w-5 flex-none text-violet-600 dark:text-violet-400" /> Unlimited Transfers</li>
                                     <li className="flex gap-x-3"><Check className="h-6 w-5 flex-none text-violet-600 dark:text-violet-400" /> {proMaxFileSize}MB Max File Size</li>
-                                    <li className="flex gap-x-3"><Check className="h-6 w-5 flex-none text-violet-600 dark:text-violet-400" /> Priority Processing (3x Faster)</li>
-                                    <li className="flex gap-x-3"><Check className="h-6 w-5 flex-none text-violet-600 dark:text-violet-400" /> Advanced Tools (Crop, Redact, Organize)</li>
-                                    <li className="flex gap-x-3"><Check className="h-6 w-5 flex-none text-violet-600 dark:text-violet-400" /> No Ads</li>
+                                    <li className="flex gap-x-3"><Check className="h-6 w-5 flex-none text-violet-600 dark:text-violet-400" /> Warp Speed (3x Faster)</li>
+                                    <li className="flex gap-x-3"><Check className="h-6 w-5 flex-none text-violet-600 dark:text-violet-400" /> Permanent Storage</li>
+                                    <li className="flex gap-x-3"><Check className="h-6 w-5 flex-none text-violet-600 dark:text-violet-400" /> Password Protection</li>
                                 </ul>
                                 {isPro ? (
                                     <button disabled className="mt-8 block w-full rounded-md bg-emerald-600/20 py-2 px-3 text-center text-sm font-semibold leading-6 text-emerald-600 dark:text-emerald-400 cursor-not-allowed border border-emerald-500/30">

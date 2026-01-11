@@ -15,6 +15,8 @@ import historyRoutes from './routes/history.js';
 import identityRoutes from './routes/identity.js';
 import deviceRoutes from './routes/device.js';
 import adminRoutes from './routes/admin.js';
+import couponsRoutes from './routes/coupons.js';
+import plansRoutes from './routes/plans.js';
 
 // WebSocket handlers (STOMP-based for legacy)
 import { handleTransferConnection, getRegisteredDevices } from './websocket/transferHandler.js';
@@ -106,6 +108,8 @@ app.use('/api/files', fileRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api', identityRoutes);
 app.use('/api/device', deviceRoutes);
+app.use('/api/coupons', couponsRoutes);
+app.use('/api/plans', plansRoutes);
 app.use('/admin', adminRoutes);
 
 // Device discovery endpoints
@@ -253,7 +257,8 @@ const startServer = async () => {
     await sequelize.authenticate();
     console.log('✅ Database connection established');
 
-    await sequelize.sync();
+    // Use alter: true to update tables with new columns (e.g. monthlyPrice in Plan)
+    await sequelize.sync({ alter: true });
     console.log('✅ Database models synced');
 
     await initializeDefaultData();
@@ -310,30 +315,61 @@ const initializeDefaultData = async () => {
   }
 
   // Initialize plans
-  const planCount = await Plan.count();
-  if (planCount === 0) {
-    await Plan.create({ name: 'SCOUT', speedLimit: 500000, fileSizeLimit: 50000000 });
-    await Plan.create({ name: 'TITAN', speedLimit: -1, fileSizeLimit: -1 });
-    console.log('✅ Plans initialized');
+  // Check for FREE plan
+  let freePlan = await Plan.findOne({ where: { name: 'FREE' } });
+  if (!freePlan) {
+    freePlan = await Plan.create({
+      name: 'FREE',
+      speedLimit: 5000000, // 5MB/s
+      fileSizeLimit: 2 * 1024 * 1024 * 1024, // 2 GB
+      dailyTransferLimit: 5,
+      storageLimitGB: 1,
+      monthlyPrice: 0,
+      priorityProcessing: false
+    });
+    console.log('✅ FREE plan created (2GB Limit)');
+  }
+
+  // Check for PRO plan
+  let proPlan = await Plan.findOne({ where: { name: 'PRO' } });
+  if (!proPlan) {
+    proPlan = await Plan.create({
+      name: 'PRO',
+      speedLimit: -1,
+      fileSizeLimit: -1, // Unlimited
+      dailyTransferLimit: -1,
+      storageLimitGB: 100,
+      monthlyPrice: 499,
+      priorityProcessing: true
+    });
+    console.log('✅ PRO plan created (Unlimited)');
   }
 
   // Initialize default admin user
   const adminUser = await User.findOne({ where: { email: 'admin@anydrop.com' } });
   if (!adminUser) {
-    const titanPlan = await Plan.findOne({ where: { name: 'TITAN' } });
     await User.create({
       username: 'admin',
       email: 'admin@anydrop.com',
       password: 'admin123',
-      role: 'ROLE_ADMIN',
-      planId: titanPlan.id
+      role: 'ADMIN', // Changed from ROLE_ADMIN to match standard
+      enabled: true,
+      planId: proPlan.id
     });
     console.log('✅ Default admin user created: admin@anydrop.com / admin123');
   } else {
-    adminUser.password = 'admin123';
-    adminUser.role = 'ROLE_ADMIN';
-    await adminUser.save();
-    console.log('✅ Default admin password and role forced reset: admin123 / ROLE_ADMIN');
+    // Ensure admin has PRO plan and correct role
+    if (adminUser.planId !== proPlan.id) {
+      adminUser.planId = proPlan.id;
+      await adminUser.save();
+    }
+    // Update password if needed (can be removed if user changed it)
+    // adminUser.password = 'admin123'; 
+    if (adminUser.role !== 'ADMIN') {
+      adminUser.role = 'ADMIN';
+      await adminUser.save();
+    }
+    console.log('✅ Admin user verified');
   }
 };
 
