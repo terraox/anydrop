@@ -52,8 +52,8 @@ function PricingTabs({ activeTab, setActiveTab, className }: TabsProps) {
           >
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
             {tab === "yearly" && (
-              <span className="ml-2 text-xs font-semibold text-secondary bg-secondary/15 py-0.5 w-[calc(100%+1rem)] px-1 rounded-full">
-                -20%
+              <span className="ml-2 text-xs font-semibold text-[#8B5CF6] bg-[#8B5CF6]/15 py-0.5 w-[calc(100%+1rem)] px-1 rounded-full">
+                -33%
               </span>
             )}
           </span>
@@ -115,12 +115,12 @@ export function PricingSection() {
           />
         </div>
 
-        <div className="grid min-[650px]:grid-cols-2 min-[900px]:grid-cols-3 gap-4 w-full max-w-6xl mx-auto px-6">
+        <div className="flex flex-col min-[650px]:flex-row gap-4 w-full max-w-3xl mx-auto px-6 justify-center">
           {siteConfig.pricing.pricingItems.map((tier) => (
             <div
               key={tier.name}
               className={cn(
-                "rounded-xl grid grid-rows-[180px_auto_1fr] relative h-fit min-[650px]:h-full min-[900px]:h-fit",
+                "rounded-xl grid grid-rows-[180px_auto_1fr] relative h-fit w-full min-[650px]:w-[340px]",
                 tier.isPopular
                   ? "md:shadow-[0px_61px_24px_-10px_rgba(0,0,0,0.01),0px_34px_20px_-8px_rgba(0,0,0,0.05),0px_15px_15px_-6px_rgba(0,0,0,0.09),0px_4px_8px_-2px_rgba(0,0,0,0.10),0px_0px_0px_1px_rgba(0,0,0,0.08)] bg-accent"
                   : "bg-[#F3F4F6] dark:bg-[#F9FAFB]/[0.02] border border-border",
@@ -130,7 +130,7 @@ export function PricingSection() {
                 <p className="text-sm">
                   {tier.name}
                   {tier.isPopular && (
-                    <span className="bg-gradient-to-b from-secondary/50 from-[1.92%] to-secondary to-[100%] text-white h-6 inline-flex w-fit items-center justify-center px-2 rounded-full text-sm ml-2 shadow-[0px_6px_6px_-3px_rgba(0,0,0,0.08),0px_3px_3px_-1.5px_rgba(0,0,0,0.08),0px_1px_1px_-0.5px_rgba(0,0,0,0.08),0px_0px_0px_1px_rgba(255,255,255,0.12)_inset,0px_1px_0px_0px_rgba(255,255,255,0.12)_inset]">
+                    <span className="bg-gradient-to-b from-[#A78BFA] from-[1.92%] to-[#8B5CF6] to-[100%] text-white h-6 inline-flex w-fit items-center justify-center px-2 rounded-full text-sm ml-2 shadow-[0px_6px_6px_-3px_rgba(0,0,0,0.08),0px_3px_3px_-1.5px_rgba(0,0,0,0.08),0px_1px_1px_-0.5px_rgba(0,0,0,0.08),0px_0px_0px_1px_rgba(255,255,255,0.12)_inset,0px_1px_0px_0px_rgba(255,255,255,0.12)_inset]">
                       Popular
                     </span>
                   )}

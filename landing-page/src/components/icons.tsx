@@ -2461,4 +2461,178 @@ export const Icons = {
       </defs>
     </svg>
   ),
+  smartphone: ({ className }: { className?: string }) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 60 60"
+      fill="none"
+      className={cn("size-12", className)}
+    >
+      <defs>
+        <linearGradient id="phoneGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#A78BFA" />
+          <stop offset="100%" stopColor="#7C3AED" />
+        </linearGradient>
+      </defs>
+      <circle cx="30" cy="30" r="28" fill="url(#phoneGrad)" />
+      <rect x="21" y="14" width="18" height="32" rx="3" fill="white" opacity="0.95" />
+      <rect x="23" y="18" width="14" height="22" rx="1" fill="#7C3AED" opacity="0.15" />
+      <circle cx="30" cy="43" r="1.5" fill="#7C3AED" />
+      <rect x="27" y="16" width="6" height="1" rx="0.5" fill="#7C3AED" opacity="0.4" />
+    </svg>
+  ),
+  laptop: ({ className }: { className?: string }) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 60 60"
+      fill="none"
+      className={cn("size-12", className)}
+    >
+      <defs>
+        <linearGradient id="laptopGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#34D399" />
+          <stop offset="100%" stopColor="#059669" />
+        </linearGradient>
+      </defs>
+      <circle cx="30" cy="30" r="28" fill="url(#laptopGrad)" />
+      <rect x="14" y="18" width="32" height="20" rx="2" fill="white" opacity="0.95" />
+      <rect x="16" y="20" width="28" height="16" rx="1" fill="#059669" opacity="0.15" />
+      <path d="M10 40h40l-3 5H13l-3-5z" fill="white" opacity="0.9" />
+    </svg>
+  ),
+  tablet: ({ className }: { className?: string }) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 60 60"
+      fill="none"
+      className={cn("size-12", className)}
+    >
+      <defs>
+        <linearGradient id="tabletGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#F472B6" />
+          <stop offset="100%" stopColor="#DB2777" />
+        </linearGradient>
+      </defs>
+      <circle cx="30" cy="30" r="28" fill="url(#tabletGrad)" />
+      <rect x="16" y="13" width="28" height="34" rx="3" fill="white" opacity="0.95" />
+      <rect x="18" y="17" width="24" height="24" rx="1" fill="#DB2777" opacity="0.15" />
+      <circle cx="30" cy="44" r="1.5" fill="#DB2777" />
+    </svg>
+  ),
+  desktop: ({ className }: { className?: string }) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 60 60"
+      fill="none"
+      className={cn("size-12", className)}
+    >
+      <defs>
+        <linearGradient id="desktopGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#60A5FA" />
+          <stop offset="100%" stopColor="#2563EB" />
+        </linearGradient>
+      </defs>
+      <circle cx="30" cy="30" r="28" fill="url(#desktopGrad)" />
+      <rect x="12" y="14" width="36" height="24" rx="2" fill="white" opacity="0.95" />
+      <rect x="14" y="16" width="32" height="20" rx="1" fill="#2563EB" opacity="0.15" />
+      <rect x="26" y="38" width="8" height="5" fill="white" opacity="0.9" />
+      <rect x="22" y="43" width="16" height="3" rx="1" fill="white" opacity="0.9" />
+    </svg>
+  ),
+  cloud: ({ className }: { className?: string }) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 60 60"
+      fill="none"
+      className={cn("size-12", className)}
+    >
+      <defs>
+        <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#38BDF8" />
+          <stop offset="100%" stopColor="#0284C7" />
+        </linearGradient>
+      </defs>
+      <circle cx="30" cy="30" r="28" fill="url(#cloudGrad)" />
+      <path d="M18 36c-3.5 0-6-2.5-6-6s2.5-6 6-6c0.5-5 4.5-9 10-9 5 0 9 3.5 10 8 4 0 7 3 7 7s-3 6-7 6H18z" fill="white" opacity="0.95" />
+      <path d="M30 28v10m-3-3l3 3 3-3" stroke="#0284C7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  watch: ({ className }: { className?: string }) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 60 60"
+      fill="none"
+      className={cn("size-12", className)}
+    >
+      <defs>
+        <linearGradient id="watchGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#FB923C" />
+          <stop offset="100%" stopColor="#EA580C" />
+        </linearGradient>
+      </defs>
+      <circle cx="30" cy="30" r="28" fill="url(#watchGrad)" />
+      <rect x="21" y="17" width="18" height="26" rx="5" fill="white" opacity="0.95" />
+      <rect x="23" y="21" width="14" height="14" rx="2" fill="#EA580C" opacity="0.15" />
+      <rect x="25" y="11" width="10" height="6" rx="1" fill="white" opacity="0.8" />
+      <rect x="25" y="43" width="10" height="6" rx="1" fill="white" opacity="0.8" />
+      <circle cx="30" cy="28" r="3" fill="none" stroke="#EA580C" strokeWidth="1.5" />
+      <line x1="30" y1="25" x2="30" y2="28" stroke="#EA580C" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  ),
+  folder: ({ className }: { className?: string }) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 60 60"
+      fill="none"
+      className={cn("size-12", className)}
+    >
+      <defs>
+        <linearGradient id="folderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#FBBF24" />
+          <stop offset="100%" stopColor="#D97706" />
+        </linearGradient>
+      </defs>
+      <circle cx="30" cy="30" r="28" fill="url(#folderGrad)" />
+      <path d="M14 22a2 2 0 0 1 2-2h8l3 3h17a2 2 0 0 1 2 2v15a2 2 0 0 1-2 2H16a2 2 0 0 1-2-2V22z" fill="white" opacity="0.95" />
+      <path d="M14 26h32v14a2 2 0 0 1-2 2H16a2 2 0 0 1-2-2V26z" fill="white" opacity="0.8" />
+    </svg>
+  ),
+  wifi: ({ className }: { className?: string }) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 60 60"
+      fill="none"
+      className={cn("size-12", className)}
+    >
+      <defs>
+        <linearGradient id="wifiGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#A78BFA" />
+          <stop offset="100%" stopColor="#7C3AED" />
+        </linearGradient>
+      </defs>
+      <circle cx="30" cy="30" r="28" fill="url(#wifiGrad)" />
+      <circle cx="30" cy="40" r="3" fill="white" />
+      <path d="M22 34a11 11 0 0 1 16 0" stroke="white" strokeWidth="3" strokeLinecap="round" fill="none" />
+      <path d="M16 27a19 19 0 0 1 28 0" stroke="white" strokeWidth="3" strokeLinecap="round" fill="none" />
+      <path d="M10 20a28 28 0 0 1 40 0" stroke="white" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.6" />
+    </svg>
+  ),
+  transfer: ({ className }: { className?: string }) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 60 60"
+      fill="none"
+      className={cn("size-12", className)}
+    >
+      <defs>
+        <linearGradient id="transferGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#4ADE80" />
+          <stop offset="100%" stopColor="#16A34A" />
+        </linearGradient>
+      </defs>
+      <circle cx="30" cy="30" r="28" fill="url(#transferGrad)" />
+      <path d="M16 23h18m-4-4l5 4-5 4" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M44 37H26m4 4l-5-4 5-4" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
 };

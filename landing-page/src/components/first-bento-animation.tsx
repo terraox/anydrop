@@ -11,7 +11,7 @@ import { AnimatePresence, motion, useInView } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
 export function ReasoningBasic() {
-  const reasoningText = `Based on your calendar patterns and preferences, I recommend scheduling the team meeting for Tuesday at 2pm. This time slot has historically had the highest attendance rate, and it avoids conflicts with other recurring meetings.`;
+  const reasoningText = `Your files are ready to transfer! I found 3 devices on your local network. The transfer will use your WiFi connection for maximum speed - no internet needed. Just tap to send your photos instantly.`;
 
   return (
     <Reasoning>
@@ -61,7 +61,7 @@ export function FirstBentoAnimation() {
       >
         <div className="flex items-end justify-end gap-3">
           <motion.div
-            className="max-w-[280px] bg-secondary text-white p-4 rounded-2xl ml-auto shadow-[0_0_10px_rgba(0,0,0,0.05)]"
+            className="max-w-[280px] bg-[#8B5CF6] text-white p-4 rounded-2xl ml-auto shadow-[0_0_10px_rgba(0,0,0,0.05)]"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{
@@ -70,8 +70,7 @@ export function FirstBentoAnimation() {
             }}
           >
             <p className="text-sm">
-              Hey, I need help scheduling a team meeting that works well for
-              everyone. Any suggestions for finding an optimal time slot?
+              I want to send these vacation photos to my laptop. Can you help me transfer them quickly?
             </p>
           </motion.div>
           <div className="flex items-center bg-background rounded-full w-fit border border-border flex-shrink-0">
