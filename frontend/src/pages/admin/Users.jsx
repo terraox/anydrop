@@ -63,16 +63,17 @@ export default function Users() {
         try {
             toast.promise(
                 async () => {
+                    // Export all users regardless of current filters (active + banned)
+                    // Explicitly don't pass search or status to get all users
                     const response = await api.get('/admin/users', {
                         params: {
-                            search: searchTerm,
-                            status: activeTab,
                             page: 0,
                             size: 10000 // Fetch a large number for export
                         }
                     });
 
                     const data = response.data.content;
+                    console.log(`Export: Fetched ${data.length} users (totalElements: ${response.data.totalElements})`);
                     if (!data || data.length === 0) throw new Error("No users to export");
 
                     const headers = ['ID', 'Username', 'Email', 'Role', 'Plan', 'Status', 'Joined'];
@@ -80,9 +81,9 @@ export default function Users() {
                         headers.join(','),
                         ...data.map(u => [
                             u.id,
-                            `"${u.username}"`, // Quote to handle commas
+                            `"${u.username || u.email.split('@')[0]}"`, // Fallback to email prefix if username missing
                             `"${u.email}"`,
-                            u.role,
+                            (u.role === 'ROLE_ADMIN' || u.role === 'ADMIN') ? 'ADMIN' : 'USER',
                             u.plan?.name || 'FREE',
                             u.enabled ? 'Active' : 'Banned',
                             new Date(u.createdAt).toISOString().split('T')[0]
@@ -189,9 +190,12 @@ export default function Users() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${user.role === 'ROLE_ADMIN' ? 'bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-500/20' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700'}`}>
-                                            {user.role === 'ROLE_ADMIN' && <Shield className="h-3 w-3" />}
-                                            {user.role === 'ROLE_ADMIN' ? 'ADMIN' : 'USER'}
+                                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${(user.role === 'ROLE_ADMIN' || user.role === 'ADMIN')
+                                            ? 'bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-500/20'
+                                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700'
+                                            }`}>
+                                            {(user.role === 'ROLE_ADMIN' || user.role === 'ADMIN') && <Shield className="h-3 w-3" />}
+                                            {(user.role === 'ROLE_ADMIN' || user.role === 'ADMIN') ? 'ADMIN' : 'USER'}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
@@ -200,7 +204,7 @@ export default function Users() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-zinc-500">
-                                        {new Date(user.createdAt).toLocaleDateString()}
+                                        {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Just now'}
                                     </td>
                                     <td className="px-6 py-4 text-right flex justify-end gap-2">
                                         <button

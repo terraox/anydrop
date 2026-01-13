@@ -48,7 +48,7 @@ export default function AdminLogin() {
                 const { token, email: userEmail, role, plan, username, avatar } = response.data;
 
                 // Check if user is admin
-                if (role !== 'ADMIN') {
+                if (role !== 'ADMIN' && role !== 'ROLE_ADMIN') {
                     setError("Access denied. This portal is for administrators only.");
                     setLoading(false);
                     return;
@@ -63,12 +63,15 @@ export default function AdminLogin() {
             console.error('Admin login error:', err);
             if (err.response) {
                 // Server responded with error
+                // Check specifically for the 'error' field sent by backend
+                const errorMessage = err.response.data?.error || err.response.data || "Authentication failed";
+
                 if (err.response.status === 403) {
-                    setError(err.response.data || "Your account has been suspended.");
+                    setError(errorMessage);
                 } else if (err.response.status === 401) {
-                    setError("Invalid credentials. Please verify your email and password.");
+                    setError(errorMessage !== "Authentication failed" ? errorMessage : "Invalid credentials. Please verify your email and password.");
                 } else {
-                    setError(`Server error: ${err.response.status}. ${err.response.data?.message || ''}`);
+                    setError(`Server error: ${errorMessage}`);
                 }
             } else if (err.request) {
                 // Request was made but no response received

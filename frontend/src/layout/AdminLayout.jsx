@@ -27,7 +27,7 @@ export default function AdminLayout() {
         if (!loading) {
             if (!isAuthenticated) {
                 navigate('/admin');
-            } else if (user?.role !== 'ADMIN') {
+            } else if (user?.role !== 'ADMIN' && user?.role !== 'ROLE_ADMIN') {
                 navigate('/');
             }
         }
@@ -38,7 +38,7 @@ export default function AdminLayout() {
         navigate('/admin');
     };
 
-    if (loading || !user || user.role !== 'ADMIN') {
+    if (loading || !user || (user.role !== 'ADMIN' && user.role !== 'ROLE_ADMIN')) {
         return (
             <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center">
                 <div className="text-center space-y-4">

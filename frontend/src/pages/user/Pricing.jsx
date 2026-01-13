@@ -31,26 +31,40 @@ export default function Pricing() {
         setIsLoading(true);
         try {
             // Fetch from new plans API to get Admin-configured values
-            const response = await api.get('/api/plans');
+            // Note: baseURL already includes /api, so use /plans not /api/plans
+            const response = await api.get('/plans');
             const data = response.data;
+
+            if (!data) {
+                console.warn('No data received from plans API');
+                // Use default values
+                return;
+            }
 
             if (data.free) {
                 setFreeLimit(data.free.dailyTransferLimit || 3);
                 setFreeMaxFileSize(data.free.maxFileSizeMB || 10);
+            } else {
+                console.warn('FREE plan data not found, using defaults');
             }
 
             if (data.pro) {
                 setProMaxFileSize(data.pro.maxFileSizeMB || 100);
-                if (data.pro.monthlyPrice) {
+                if (data.pro.monthlyPrice !== undefined && data.pro.monthlyPrice !== null) {
                     const mPrice = parseFloat(data.pro.monthlyPrice);
                     setMonthlyPrice(mPrice);
                     // Same logic as Checkout.jsx
                     setAnnualPrice(Math.round(mPrice * 10));
                 }
+            } else {
+                console.warn('PRO plan data not found, using defaults');
             }
         } catch (error) {
             console.error('Failed to fetch plan config', error);
-            toast.error("Could not load pricing details");
+            const errorMessage = error.response?.data?.error || error.message || 'Unknown error';
+            console.error('Error details:', errorMessage);
+            toast.error(`Could not load pricing details: ${errorMessage}`);
+            // Don't set loading to false immediately, let user see the error
         } finally {
             setIsLoading(false);
         }

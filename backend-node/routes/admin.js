@@ -66,15 +66,21 @@ router.get('/users', async (req, res) => {
         { username: { [Op.iLike]: `%${search}%` } }
       ];
     }
+    // Only filter by status if explicitly provided and not empty
     if (status === 'banned') {
       where.enabled = false;
     } else if (status === 'active') {
       where.enabled = true;
     }
+    // If status is undefined, null, or empty string, don't filter (get all users)
 
     const { count, rows } = await User.findAndCountAll({
       where,
-      include: [{ model: Plan, as: 'plan' }],
+      include: [{ 
+        model: Plan, 
+        as: 'plan',
+        required: false // Explicit LEFT JOIN to include users without plans
+      }],
       limit,
       offset,
       order: [['createdAt', 'DESC']]
@@ -203,7 +209,18 @@ router.get('/plans/config', async (req, res) => {
       } else {
         plainPlan.maxFileSizeMB = -1;
       }
-      config[plan.name.toLowerCase()] = plainPlan;
+      // Ensure all fields are included in response
+      config[plan.name.toLowerCase()] = {
+        id: plainPlan.id,
+        name: plainPlan.name,
+        maxFileSizeMB: plainPlan.maxFileSizeMB,
+        dailyTransferLimit: plainPlan.dailyTransferLimit,
+        storageLimitGB: plainPlan.storageLimitGB,
+        monthlyPrice: plainPlan.monthlyPrice,
+        priorityProcessing: plainPlan.priorityProcessing,
+        speedLimit: plainPlan.speedLimit,
+        fileSizeLimit: plainPlan.fileSizeLimit
+      };
     });
     res.json(config);
   } catch (error) {
@@ -214,7 +231,7 @@ router.get('/plans/config', async (req, res) => {
 
 router.put('/plans/config', async (req, res) => {
   try {
-    const { planName, maxFileSizeMB, ...otherUpdates } = req.body;
+    const { planName, maxFileSizeMB, dailyTransferLimit, storageLimitGB, priorityProcessing, monthlyPrice } = req.body;
     if (!planName) {
       return res.status(400).json({ error: 'Plan name is required' });
     }
@@ -224,7 +241,7 @@ router.put('/plans/config', async (req, res) => {
       return res.status(404).json({ error: 'Plan not found' });
     }
 
-    const updates = { ...otherUpdates };
+    const updates = {};
 
     // Convert MB to Bytes for storage
     if (maxFileSizeMB !== undefined) {
@@ -235,8 +252,31 @@ router.put('/plans/config', async (req, res) => {
       }
     }
 
+    // Handle other fields
+    if (dailyTransferLimit !== undefined) {
+      updates.dailyTransferLimit = dailyTransferLimit;
+    }
+    if (storageLimitGB !== undefined) {
+      updates.storageLimitGB = storageLimitGB;
+    }
+    if (priorityProcessing !== undefined) {
+      updates.priorityProcessing = priorityProcessing;
+    }
+    if (monthlyPrice !== undefined) {
+      updates.monthlyPrice = monthlyPrice;
+    }
+
     await plan.update(updates);
-    res.json(plan);
+    
+    // Return updated plan with converted fields for frontend
+    const updatedPlan = plan.get({ plain: true });
+    if (updatedPlan.fileSizeLimit !== -1) {
+      updatedPlan.maxFileSizeMB = Math.floor(updatedPlan.fileSizeLimit / (1024 * 1024));
+    } else {
+      updatedPlan.maxFileSizeMB = -1;
+    }
+    
+    res.json(updatedPlan);
   } catch (error) {
     console.error('Update plan config error:', error);
     res.status(500).json({ error: 'Failed to update plan config' });

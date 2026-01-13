@@ -48,6 +48,7 @@ export default function Plans() {
     const handleSave = async () => {
         setLoading(true);
         try {
+            // Save FREE plan config
             await api.put('/admin/plans/config', {
                 planName: 'FREE',
                 maxFileSizeMB: freeMaxFileSize,
@@ -55,8 +56,9 @@ export default function Plans() {
                 storageLimitGB: freeStorageLimit,
                 priorityProcessing: false,
                 monthlyPrice: freePrice,
-            }, { params: { planName: 'FREE' } });
+            });
 
+            // Save PRO plan config
             await api.put('/admin/plans/config', {
                 planName: 'PRO',
                 maxFileSizeMB: proMaxFileSize,
@@ -64,11 +66,13 @@ export default function Plans() {
                 storageLimitGB: proStorageLimit,
                 priorityProcessing: proPriorityProcessing,
                 monthlyPrice: proPrice,
-            }, { params: { planName: 'PRO' } });
+            });
 
             setSaved(true);
             toast.success("Configuration saved successfully!");
             setTimeout(() => setSaved(false), 2000);
+            // Refresh configs to show updated values
+            await fetchConfigs();
         } catch (e) {
             console.error('Failed to save plan configs', e);
             toast.error('Failed to save plan configs');

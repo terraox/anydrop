@@ -34,6 +34,7 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
   className,
   maxOpacity = 0.15,
   text = "",
+  textColor,
   fontSize = 140,
   fontWeight = 600,
   ...props
@@ -47,6 +48,12 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
   const memoizedColor = useMemo(() => {
     return getRGBA(color);
   }, [color]);
+
+  const [parsedTextColor, setParsedTextColor] = useState<string | null>(null);
+
+  useEffect(() => {
+    setParsedTextColor(textColor ? getRGBA(textColor) : null);
+  }, [textColor]);
 
   const drawGrid = useCallback(
     (
@@ -102,12 +109,24 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
             ? Math.min(1, opacity * 3 + 0.4)
             : opacity;
 
-          ctx.fillStyle = colorWithOpacity(memoizedColor, finalOpacity);
+          // Use textColor if specified and square is part of text, otherwise use default color
+          const finalColor =
+            hasText && parsedTextColor ? parsedTextColor : memoizedColor;
+
+          ctx.fillStyle = colorWithOpacity(finalColor, finalOpacity);
           ctx.fillRect(x, y, squareWidth, squareHeight);
         }
       }
     },
-    [memoizedColor, squareSize, gridGap, text, fontSize, fontWeight],
+    [
+      memoizedColor,
+      parsedTextColor,
+      squareSize,
+      gridGap,
+      text,
+      fontSize,
+      fontWeight,
+    ],
   );
 
   const setupCanvas = useCallback(

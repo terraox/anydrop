@@ -4,7 +4,7 @@ import { User } from '../models/index.js';
 export const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'No token provided' });
     }
@@ -32,7 +32,7 @@ export const authenticate = async (req, res, next) => {
 };
 
 export const requireAdmin = (req, res, next) => {
-  if (!req.user || req.user.role !== 'ROLE_ADMIN') {
+  if (!req.user || (req.user.role !== 'ROLE_ADMIN' && req.user.role !== 'ADMIN')) {
     return res.status(403).json({ error: 'Admin access required' });
   }
   next();

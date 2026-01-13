@@ -72,16 +72,16 @@ export default function Login() {
 
       if (err.response) {
         // Server responded with error
+        // Check specifically for the 'error' field sent by backend
+        const errorMessage = err.response.data?.error || err.response.data?.message || "Authentication failed";
+
         if (err.response.status === 401) {
-          setError("Invalid email or password.");
+          setError(errorMessage !== "Authentication failed" ? errorMessage : "Invalid email or password.");
         } else if (err.response.status === 403) {
-          setError(err.response.data?.message || "Access denied. Your account may be suspended.");
+          setError(errorMessage);
         } else if (err.response.status === 500) {
           setError("Server error. Please try again later.");
         } else {
-          const errorMessage = err.response.data?.message ||
-            (typeof err.response.data === 'string' ? err.response.data : null) ||
-            `Server Error: ${err.response.status}`;
           setError(errorMessage);
         }
       } else if (err.request) {

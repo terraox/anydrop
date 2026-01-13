@@ -103,14 +103,17 @@ app.get('/api/identify', async (req, res) => {
 });
 
 // API Routes
+app.use('/api/admin', adminRoutes); // Moved up for specificity
 app.use('/api/auth', authRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/history', historyRoutes);
-app.use('/api', identityRoutes);
 app.use('/api/device', deviceRoutes);
 app.use('/api/coupons', couponsRoutes);
 app.use('/api/plans', plansRoutes);
-app.use('/admin', adminRoutes);
+app.use('/api', identityRoutes); // General route at the end of specificity-matched routes
+
+// Health check and heartbeat
+app.get('/api/admin/ping', (req, res) => res.json({ status: 'pong', access: 'public' }));
 
 // Device discovery endpoints
 app.get('/api/devices', (req, res) => {

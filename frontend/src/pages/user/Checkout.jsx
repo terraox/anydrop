@@ -27,7 +27,8 @@ export default function Checkout() {
     useEffect(() => {
         const fetchPlanPrice = async () => {
             try {
-                const res = await api.get('/api/plans');
+                // Note: baseURL already includes /api, so use /plans not /api/plans
+                const res = await api.get('/plans');
                 const pro = res.data.pro;
                 if (pro && pro.monthlyPrice) {
                     const mPrice = parseFloat(pro.monthlyPrice);

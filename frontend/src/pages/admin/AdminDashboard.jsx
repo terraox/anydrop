@@ -1,27 +1,61 @@
-import React, { useState } from 'react';
-import { Users, HardDrive, Wifi, ArrowUpRight, Activity, Clock, Zap, TrendingUp } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Users, HardDrive, Wifi, ArrowUpRight, Activity, Clock, Zap, TrendingUp, Loader2 } from 'lucide-react';
 import NumberTicker from '../../components/magicui/NumberTicker';
 import { useTheme } from 'next-themes';
-
-// Mock Data for the chart display
-const trafficData = [
-    { name: 'Mon', files: 120 }, { name: 'Tue', files: 250 },
-    { name: 'Wed', files: 180 }, { name: 'Thu', files: 310 },
-    { name: 'Fri', files: 290 }, { name: 'Sat', files: 100 },
-    { name: 'Sun', files: 140 },
-];
-
-// Recent activity mock data
-const recentActivity = [
-    { action: "New user registered", user: "alice@example.com", time: "2 min ago", color: "bg-emerald-500" },
-    { action: "File transfer completed", user: "bob@example.com", time: "5 min ago", color: "bg-blue-500" },
-    { action: "Pro plan activated", user: "charlie@example.com", time: "15 min ago", color: "bg-amber-500" },
-    { action: "Large file uploaded (2.4 GB)", user: "diana@example.com", time: "1 hour ago", color: "bg-violet-500" },
-];
+import api from '../../services/api';
+import { toast } from 'sonner';
 
 export default function AdminDashboard() {
     const { resolvedTheme } = useTheme();
-    const isDark = resolvedTheme === 'dark';
+    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState({
+        totalUsers: 0,
+        activeUsers: 0,
+        totalFiles: 0,
+        totalSize: 0,
+        bannedUsers: 0
+    });
+    const [activity, setActivity] = useState([]);
+    const [trafficData, setTrafficData] = useState([]);
+
+    const fetchDashboardData = async () => {
+        try {
+            setLoading(true);
+            const [statsRes, activityRes, chartRes] = await Promise.all([
+                api.get('/admin/dashboard/stats'),
+                api.get('/admin/dashboard/activity'),
+                api.get('/admin/dashboard/transfers-chart')
+            ]);
+
+            setStats(statsRes.data);
+            setActivity(activityRes.data);
+            setTrafficData(chartRes.data);
+        } catch (error) {
+            console.error("Failed to fetch dashboard data:", error);
+            toast.error("Failed to load dashboard statistics");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchDashboardData();
+    }, []);
+
+    const formatBytes = (bytes) => {
+        if (!bytes) return '0 GB';
+        const gb = bytes / (1024 * 1024 * 1024);
+        return gb.toFixed(1);
+    };
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+                <Loader2 className="h-8 w-8 text-violet-500 animate-spin" />
+                <p className="text-zinc-500 text-sm animate-pulse">Synchronizing command center...</p>
+            </div>
+        );
+    }
 
     return (
         <>
@@ -49,24 +83,23 @@ export default function AdminDashboard() {
                         <Users className="h-4 w-4 text-violet-500" />
                     </div>
                     <div className="mt-2 text-3xl font-bold text-zinc-900 dark:text-white">
-                        <NumberTicker value={1247} />
+                        <NumberTicker value={stats.totalUsers} />
                     </div>
-                    <p className="flex items-center text-xs mt-2 text-emerald-500">
-                        <ArrowUpRight className="h-3 w-3 mr-1" />
-                        +12% from last month
+                    <p className="flex items-center text-xs mt-2 text-zinc-500">
+                        {stats.activeUsers} active accounts
                     </p>
                 </div>
 
-                {/* Active Transfers */}
+                {/* Total Files */}
                 <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Active Transfers</h3>
+                        <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Total Transfers</h3>
                         <Activity className="h-4 w-4 text-blue-500" />
                     </div>
                     <div className="mt-2 text-3xl font-bold text-zinc-900 dark:text-white">
-                        <NumberTicker value={42} />
+                        <NumberTicker value={stats.totalFiles} />
                     </div>
-                    <p className="text-xs text-zinc-500 mt-2">Currently in progress</p>
+                    <p className="text-xs text-zinc-500 mt-2">Historical file count</p>
                 </div>
 
                 {/* Storage Used */}
@@ -76,25 +109,24 @@ export default function AdminDashboard() {
                         <HardDrive className="h-4 w-4 text-violet-500" />
                     </div>
                     <div className="mt-2 text-3xl font-bold text-zinc-900 dark:text-white">
-                        856<span className="text-lg text-zinc-500 font-normal ml-1">GB</span>
+                        {formatBytes(stats.totalSize)}<span className="text-lg text-zinc-500 font-normal ml-1">GB</span>
                     </div>
                     <div className="mt-3 h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800">
                         <div className="h-full rounded-full bg-violet-500" style={{ width: '42%' }}></div>
                     </div>
                 </div>
 
-                {/* Bandwidth */}
+                {/* Banned Users */}
                 <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Bandwidth Today</h3>
-                        <Wifi className="h-4 w-4 text-emerald-500" />
+                        <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Banned Users</h3>
+                        <Zap className="h-4 w-4 text-red-500" />
                     </div>
                     <div className="mt-2 text-3xl font-bold text-zinc-900 dark:text-white">
-                        128<span className="text-lg text-zinc-500 font-normal ml-1">GB</span>
+                        <NumberTicker value={stats.bannedUsers} />
                     </div>
-                    <p className="flex items-center text-xs mt-2 text-emerald-500">
-                        <TrendingUp className="h-3 w-3 mr-1" />
-                        Peak: 3.2 GB/min
+                    <p className="flex items-center text-xs mt-2 text-zinc-500">
+                        Restricted access
                     </p>
                 </div>
             </div>
@@ -110,7 +142,7 @@ export default function AdminDashboard() {
                                 <div className="w-full relative">
                                     <div
                                         className="w-full bg-gradient-to-t from-violet-500 to-violet-400 rounded-t-lg transition-all group-hover:from-violet-400 group-hover:to-orange-300"
-                                        style={{ height: `${(day.files / 350) * 200}px` }}
+                                        style={{ height: `${(day.files / Math.max(...trafficData.map(d => d.files), 1)) * 200}px` }}
                                     >
                                         <div className="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900 text-white text-xs px-2 py-1 rounded">
                                             {day.files}
@@ -124,15 +156,15 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Recent Activity Section */}
-                <div className="lg:col-span-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
+                <div className="lg:col-span-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm overflow-hidden flex flex-col">
                     <h3 className="mb-6 text-lg font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                         <Clock className="h-4 w-4 text-zinc-400" />
                         Recent Activity
                     </h3>
-                    <div className="space-y-5">
-                        {recentActivity.map((log, i) => (
-                            <div key={i} className="flex items-start gap-4">
-                                <span className={`h-2 w-2 rounded-full ${log.color} mt-2 flex-shrink-0`} />
+                    <div className="space-y-5 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
+                        {activity.map((log, i) => (
+                            <div key={i} className="flex items-start gap-4 animate-in fade-in slide-in-from-right-2 duration-300" style={{ animationDelay: `${i * 50}ms` }}>
+                                <span className={`h-2 w-2 rounded-full bg-violet-500 mt-2 flex-shrink-0 shadow-[0_0_8px_rgba(139,92,246,0.5)]`} />
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200 truncate">{log.action}</p>
                                     <p className="text-xs text-zinc-500 truncate">{log.user} • {log.time}</p>
@@ -140,7 +172,7 @@ export default function AdminDashboard() {
                             </div>
                         ))}
                     </div>
-                    <button className="w-full mt-6 py-2 text-sm text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 rounded-lg transition-colors">
+                    <button className="w-full mt-auto pt-6 py-2 text-sm text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 rounded-lg transition-colors border-t border-zinc-100 dark:border-zinc-800">
                         View All Activity
                     </button>
                 </div>
@@ -157,7 +189,7 @@ export default function AdminDashboard() {
                     <a
                         key={i}
                         href={action.href}
-                        className="flex items-center gap-3 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-violet-50 dark:hover:bg-violet-500/5 hover:border-orange-200 dark:hover:border-violet-500/20 transition-all group"
+                        className="flex items-center gap-3 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-violet-50 dark:hover:bg-violet-500/5 hover:border-violet-200 dark:hover:border-violet-500/20 transition-all group shadow-sm"
                     >
                         <action.icon className="h-5 w-5 text-zinc-400 group-hover:text-violet-500 transition-colors" />
                         <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">{action.label}</span>
