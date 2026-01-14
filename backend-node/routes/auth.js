@@ -2,6 +2,7 @@ import express from 'express';
 import { User, Plan, ResetToken } from '../models/index.js';
 import { generateToken } from '../services/jwtService.js';
 import { sendWelcomeEmail, sendForgotPasswordEmail } from '../services/emailService.js';
+import { authenticate } from '../middleware/auth.js';
 import bcrypt from 'bcryptjs';
 
 const router = express.Router();
@@ -293,5 +294,43 @@ router.post('/change-password', async (req, res) => {
   }
 });
 
-export default router;
+// Get transfer status for authenticated users
+router.get('/transfer-status', authenticate, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id, {
+      include: [{ model: Plan, as: 'plan' }]
+    });
 
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Reset count if it's a new day
+    const today = new Date().toISOString().split('T')[0];
+    if (user.plan && user.plan.dailyTransferLimit !== -1) {
+      if (!user.lastTransferResetDate || user.lastTransferResetDate !== today) {
+        user.dailyTransferCount = 0;
+        user.lastTransferResetDate = today;
+        await user.save();
+      }
+    }
+
+    const response = {
+      hasLimit: user.plan && user.plan.dailyTransferLimit !== -1,
+      dailyLimit: user.plan?.dailyTransferLimit || -1,
+      usedToday: user.dailyTransferCount || 0,
+      remainingToday: null
+    };
+
+    if (response.hasLimit) {
+      response.remainingToday = user.plan.dailyTransferLimit - user.dailyTransferCount;
+    }
+
+    res.json(response);
+  } catch (error) {
+    console.error('Transfer status error:', error);
+    res.status(500).json({ error: 'Failed to get transfer status' });
+  }
+});
+
+export default router;

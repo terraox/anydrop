@@ -192,7 +192,7 @@ wss.on('connection', (ws, req) => {
         });
 
         connectedClients.forEach(client => {
-          if (client.readyState === 1) client.send(metadataMessage);
+          if (client !== ws && client.readyState === 1) client.send(metadataMessage);
         });
 
       } else if (data.type === 'ACCEPT') {
@@ -232,6 +232,17 @@ wss.on('connection', (ws, req) => {
         });
         connectedClients.forEach(client => {
           if (client.readyState === 1) client.send(progressMessage);
+        });
+      } else if (data.type === 'TEXT_MESSAGE') {
+        const textMessage = JSON.stringify({
+          type: 'TEXT_MESSAGE',
+          text: data.text,
+          senderId: data.senderId,
+          timestamp: Date.now()
+        });
+        console.log('📝 Broadcasting TEXT_MESSAGE');
+        connectedClients.forEach(client => {
+          if (client !== ws && client.readyState === 1) client.send(textMessage);
         });
       }
     } catch (error) {

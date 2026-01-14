@@ -61,6 +61,14 @@ const User = sequelize.define('User', {
     type: DataTypes.BOOLEAN,
     defaultValue: true
   },
+  dailyTransferCount: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  lastTransferResetDate: {
+    type: DataTypes.DATEONLY,
+    allowNull: true
+  },
   createdAt: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,

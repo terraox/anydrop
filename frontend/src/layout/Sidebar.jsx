@@ -18,6 +18,7 @@ import Logo from '../components/ui/Logo';
 import ShimmerButton from '../components/magicui/ShimmerButton';
 import ThemeToggle from '../components/ui/ThemeToggle';
 import { useTheme } from 'next-themes';
+import api from '../services/api';
 
 export default function Sidebar() {
   const location = useLocation();
@@ -28,6 +29,9 @@ export default function Sidebar() {
   // Dynamic view mode state
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('orbit_view_mode') || 'classic');
 
+  // Transfer status for free users
+  const [transferStatus, setTransferStatus] = useState(null);
+
   useEffect(() => {
     const handleViewChange = () => {
       setViewMode(localStorage.getItem('orbit_view_mode') || 'classic');
@@ -35,6 +39,27 @@ export default function Sidebar() {
     window.addEventListener('orbit-view-change', handleViewChange);
     return () => window.removeEventListener('orbit-view-change', handleViewChange);
   }, []);
+
+  // Fetch transfer status for free users
+  useEffect(() => {
+    const fetchTransferStatus = async () => {
+      if (!isPro && user) {
+        try {
+          const response = await api.get('/auth/transfer-status');
+          setTransferStatus(response.data);
+        } catch (error) {
+          console.error('Failed to fetch transfer status:', error);
+        }
+      }
+    };
+
+    fetchTransferStatus();
+    // Refresh every 10 seconds if user is free
+    const interval = !isPro ? setInterval(fetchTransferStatus, 10000) : null;
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isPro, user]);
 
   // Dynamic nav items based on view mode
   const navItems = [
@@ -109,6 +134,31 @@ export default function Sidebar() {
               <Zap className="w-4 h-4 fill-current animate-pulse" />
               <span className="text-xs font-bold tracking-wider uppercase">Free Plan</span>
             </div>
+
+            {/* Transfer Count Display */}
+            {transferStatus?.hasLimit && (
+              <div className="mb-3 p-2.5 rounded-lg bg-white/5 dark:bg-black/5 border border-white/10 dark:border-black/10">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-medium text-zinc-300 dark:text-zinc-600">Daily Transfers</span>
+                  <span className="text-xs font-bold text-white dark:text-zinc-900">
+                    {transferStatus.remainingToday}/{transferStatus.dailyLimit}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-white/10 dark:bg-black/10 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${transferStatus.remainingToday === 0
+                        ? 'bg-red-500'
+                        : transferStatus.remainingToday <= 1
+                          ? 'bg-amber-500'
+                          : 'bg-violet-500'
+                      }`}
+                    style={{
+                      width: `${(transferStatus.remainingToday / transferStatus.dailyLimit) * 100}%`
+                    }}
+                  />
+                </div>
+              </div>
+            )}
 
             <p className="text-sm text-zinc-400 dark:text-zinc-500 mb-4 leading-relaxed">
               Unlock 10GB transfers and Warp Speed.

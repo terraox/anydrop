@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
+import 'package:shelf_web_socket/shelf_web_socket.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// HTTP Server Service for phone
 /// Runs a minimal HTTP server on port 8080 to respond to /api/identify requests
@@ -16,6 +18,9 @@ class HttpServerService {
   /// Callback for incoming file transfers
   Future<shelf.Response> Function(shelf.Request)? onFileTransfer;
 
+  /// Callback for incoming WebSocket connections
+  void Function(WebSocketChannel, String)? onWebSocketConnect;
+
   /// Start the HTTP server on port 8080
   Future<void> startServer({
     required String deviceName,
@@ -27,7 +32,8 @@ class HttpServerService {
     try {
       // Create a handler that responds to /api/identify and /api/files/transfer
       final handler = const shelf.Pipeline()
-          .addMiddleware(shelf.logRequests())
+          // ❌ REMOVE logRequests() as it consumes the request body stream!
+          // .addMiddleware(shelf.logRequests()) 
           .addMiddleware(_corsMiddleware())
           .addHandler((request) async {
         if (request.url.path == 'api/identify') {
@@ -62,6 +68,18 @@ class HttpServerService {
             return await onFileTransfer!(request);
           }
           return shelf.Response.internalServerError(body: 'No transfer handler registered');
+        }
+
+        // Handle WebSocket signaling (receiver hosts /ws server)
+        if (request.url.path == 'ws' || request.url.path == '/ws') {
+          debugPrint('🔌 Incoming WS request on /ws');
+          return webSocketHandler((WebSocketChannel webSocket) {
+            debugPrint('✅ WebSocket connection established');
+            if (onWebSocketConnect != null) {
+              final clientIp = request.context['shelf.io.connection_info'] as HttpConnectionInfo?;
+              onWebSocketConnect!(webSocket, clientIp?.remoteAddress.address ?? 'unknown');
+            }
+          })(request);
         }
 
         // 404 for other paths

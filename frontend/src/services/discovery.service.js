@@ -137,7 +137,53 @@ class DiscoveryService {
         await Promise.all(scanPromises);
 
         this.isScanning = false;
-        console.log(`✅ Scan complete. Found ${this.devices.length} device(s).`);
+
+        // Also fetch from backend mDNS browser (server-side discovery matches random ports better)
+        try {
+            console.log('🌍 Fetching devices from backend /api/devices...');
+            const res = await fetch('/api/devices');
+            if (res.ok) {
+                const data = await res.json();
+                if (data.devices && Array.isArray(data.devices)) {
+                    console.log(`📡 Backend found ${data.devices.length} devices via mDNS`);
+                    data.devices.forEach(d => {
+                        // Map backend format to frontend format
+                        // Backend: { name, port, addresses: ['192...'], txt: { id... } }
+                        // We need to ensure we have ID.
+                        // Backend mdns-browser usually returns: { name, host, port, addresses, txt }
+
+                        // Check if we already have this device by IP
+                        const ip = d.addresses?.[0] || d.host;
+                        if (!ip) return;
+
+                        // Try to find existing
+                        const existingIdx = this.devices.findIndex(existing => existing.ip === ip || existing.name === d.name);
+
+                        const newDevice = {
+                            id: d.txt?.id || d.id || `${ip}:${d.port}`,
+                            name: d.name || d.host || 'Unknown LAN Device',
+                            type: 'phone', // Assume phone if mDNS found it and we didn't via scan? Or text record?
+                            icon: d.txt?.icon || 'phone',
+                            ip: ip,
+                            port: d.port,
+                            status: 'online',
+                            battery: 100
+                        };
+
+                        if (existingIdx >= 0) {
+                            // Update existing (Backend specific data might be better, e.g. Port)
+                            this.devices[existingIdx] = { ...this.devices[existingIdx], ...newDevice };
+                        } else {
+                            this.devices.push(newDevice);
+                        }
+                    });
+                }
+            }
+        } catch (err) {
+            console.warn('Failed to fetch backend devices:', err);
+        }
+
+        console.log(`✅ Scan complete (Browser + Backend). Found ${this.devices.length} device(s).`);
         this._notifyListeners();
     }
 

@@ -107,6 +107,7 @@ class WebSocketService {
 
     registerDevice(deviceInfo) {
         this.send('/app/device.register', {
+            id: deviceInfo.id, // Pass ID if available
             name: deviceInfo.name,
             type: 'DESKTOP',
             model: 'Web Browser',

@@ -26,8 +26,10 @@ class LocalFileTransferService {
      * @param {string} senderDeviceId - Sender's device ID
      * @returns {Promise<string>} Transfer ID
      */
-    async sendFile(file, receiverIp, receiverPort = 8080, senderDeviceId = 'web-client') {
-        const transferId = `transfer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    async sendFile(file, receiverIp, receiverPort = 8080, senderDeviceId = 'web-client', transferId = null) {
+        if (!transferId) {
+            transferId = `transfer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        }
 
         console.log('📤 Initiating file transfer:', {
             fileName: file.name,
@@ -110,6 +112,48 @@ class LocalFileTransferService {
     }
 
     /**
+     * Send text message to receiver
+     * @param {string} text - Text content
+     * @param {string} receiverIp - Receiver's LAN IP
+     * @param {number} receiverPort - Receiver's port (default 8080)
+     * @param {string} senderDeviceId - Sender's device ID
+     */
+    async sendText(text, receiverIp, receiverPort = 8080, senderDeviceId = 'web-client') {
+        console.log('📤 Sending text:', { text, receiverIp });
+
+        // Connect if needed
+        if (!LocalTransferWebSocketService.isConnected) {
+            console.log('🔌 Connecting to receiver WebSocket for text...');
+            LocalTransferWebSocketService.connect(receiverIp, receiverPort);
+
+            // Wait for READY handshake
+            await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error('WebSocket connection timeout'));
+                }, 5000);
+
+                const onReady = () => {
+                    clearTimeout(timeout);
+                    LocalTransferWebSocketService.off('ready', onReady);
+                    resolve();
+                };
+
+                LocalTransferWebSocketService.on('ready', onReady);
+            });
+        }
+
+        const message = {
+            type: 'TEXT_MESSAGE',
+            text: text,
+            senderId: senderDeviceId,
+            timestamp: Date.now()
+        };
+
+        LocalTransferWebSocketService.send(message);
+        return true;
+    }
+
+    /**
      * Start HTTP POST upload after ACCEPT
      * 
      * ❌ Do NOT use FormData
@@ -127,16 +171,12 @@ class LocalFileTransferService {
         }
 
         const { file, targetIp, targetPort, senderDeviceId } = transfer;
-        
+
         // Include transferId in URL query param for easy access on backend
         const uploadUrl = `http://${targetIp}:${targetPort}/upload?transferId=${encodeURIComponent(transferId)}`;
 
-        console.log('🚀 Starting RAW HTTP upload:', {
-            url: uploadUrl,
-            fileName: file.name,
-            fileSize: file.size,
-            contentType: 'application/octet-stream'
-        });
+        console.log(`🚀 Starting RAW HTTP upload to ${uploadUrl}`);
+        console.log(`   File: ${file.name}, Size: ${file.size} bytes`);
 
         // 🚨 MANDATORY: Use XMLHttpRequest for progress tracking
         const xhr = new XMLHttpRequest();
@@ -146,7 +186,7 @@ class LocalFileTransferService {
         xhr.upload.onprogress = (event) => {
             if (event.lengthComputable) {
                 const progress = (event.loaded / event.total) * 100;
-                console.log(`📊 UPLOAD PROGRESS: ${progress.toFixed(1)}%`);
+                console.log(`📊 UPLOAD PROGRESS: ${progress.toFixed(1)}% (${event.loaded}/${event.total} bytes)`);
 
                 if (this.onProgress) {
                     this.onProgress(transferId, progress, event.loaded, event.total);
@@ -164,12 +204,20 @@ class LocalFileTransferService {
                     this.onComplete(transferId, file.name);
                 }
             } else {
-                console.error('❌ UPLOAD FAILED:', xhr.status, xhr.statusText);
+                console.error('❌ UPLOAD FAILED:', xhr.status, xhr.statusText, xhr.responseText);
                 this.pendingTransfers.delete(transferId);
                 this.activeUploads.delete(transferId);
 
+                let errorMessage = xhr.statusText;
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response.error) errorMessage = response.error;
+                } catch (e) {
+                    // Ignore JSON parse error, use statusText
+                }
+
                 if (this.onError) {
-                    this.onError(transferId, `Upload failed: ${xhr.statusText}`);
+                    this.onError(transferId, errorMessage);
                 }
             }
         };
@@ -200,8 +248,8 @@ class LocalFileTransferService {
         xhr.setRequestHeader('X-Sender-Device-Id', senderDeviceId);
 
         // 🚨 MANDATORY: xhr.send(file) - NOT FormData, direct File object
+        console.log(`📤 Sending ${file.size} bytes of raw data...`);
         xhr.send(file);
-        console.log('📤 HTTP POST /upload sent with application/octet-stream - check Network tab');
     }
 
     /**

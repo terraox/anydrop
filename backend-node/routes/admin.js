@@ -76,8 +76,8 @@ router.get('/users', async (req, res) => {
 
     const { count, rows } = await User.findAndCountAll({
       where,
-      include: [{ 
-        model: Plan, 
+      include: [{
+        model: Plan,
         as: 'plan',
         required: false // Explicit LEFT JOIN to include users without plans
       }],
@@ -181,7 +181,7 @@ router.post('/coupons', async (req, res) => {
     res.json(coupon);
   } catch (error) {
     console.error('Create coupon error:', error);
-    res.status(500).json({ error: 'Failed to create coupon' });
+    res.status(500).json({ error: error.message || 'Failed to create coupon' });
   }
 });
 
@@ -267,7 +267,7 @@ router.put('/plans/config', async (req, res) => {
     }
 
     await plan.update(updates);
-    
+
     // Return updated plan with converted fields for frontend
     const updatedPlan = plan.get({ plain: true });
     if (updatedPlan.fileSizeLimit !== -1) {
@@ -275,7 +275,7 @@ router.put('/plans/config', async (req, res) => {
     } else {
       updatedPlan.maxFileSizeMB = -1;
     }
-    
+
     res.json(updatedPlan);
   } catch (error) {
     console.error('Update plan config error:', error);

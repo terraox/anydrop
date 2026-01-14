@@ -98,6 +98,13 @@ export default function Receive() {
         const handleFileMetadata = (data) => {
             console.log('📥 FILE_METADATA received:', data);
 
+            // Filter out files sent by this device (if senderId matches our ID)
+            const webDeviceId = localStorage.getItem('anydrop_web_device_id');
+            if (data.senderId === webDeviceId) {
+                console.log('🔄 Ignoring self-sent file metadata');
+                return;
+            }
+
             const files = data.files || [];
             const newFiles = files.map((file, index) => ({
                 transferId: data.transferId,

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CreditCard, Loader2, Sparkles, Tag, ShieldCheck, ArrowLeft, Check } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import Logo from '../../components/ui/Logo';
+import api from '../../services/api';
 
 export default function Checkout() {
     const navigate = useNavigate();
@@ -57,7 +58,7 @@ export default function Checkout() {
         if (!couponCode) return;
         setIsVerifying(true);
         try {
-            const response = await api.post('/api/coupons/verify', { code: couponCode });
+            const response = await api.post('/coupons/verify', { code: couponCode });
             setDiscount({
                 percent: response.data.discountPercent,
                 code: response.data.code
@@ -248,15 +249,19 @@ export default function Checkout() {
                                         />
                                     </div>
                                     {couponCode && (
-                                        <button className="text-xs font-bold text-violet-600 hover:text-violet-500 px-3 bg-violet-50 dark:bg-violet-500/10 rounded-lg transition-colors">
-                                            APPLY
+                                        <button
+                                            onClick={handleApplyCoupon}
+                                            disabled={isVerifying}
+                                            className="text-xs font-bold text-violet-600 hover:text-violet-500 px-3 bg-violet-50 dark:bg-violet-500/10 rounded-lg transition-colors disabled:opacity-50"
+                                        >
+                                            {isVerifying ? 'Verifying...' : 'APPLY'}
                                         </button>
                                     )}
                                 </div>
                             </div>
 
                             <button
-                                onClick={handleApplyCoupon}
+                                onClick={finishCheckout}
                                 disabled={isVerifying || !isFormValid}
                                 className="w-full py-4 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-base shadow-lg shadow-violet-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 mt-2"
                             >

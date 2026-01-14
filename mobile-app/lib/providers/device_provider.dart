@@ -58,11 +58,18 @@ class DeviceProvider extends ChangeNotifier {
   DiscoveryProvider get discoveryProvider => _discoveryProvider;
 
   /// Get combined list of devices from both mDNS and WebSocket
-  /// Excludes the phone's own IP from the list
+  /// Excludes the phone's own IP, ID, and name from the list
   List<Device> get nearbyDevices {
-    // Convert mDNS discovered devices to the Device model, filtering out our own IP
+    // Convert mDNS discovered devices to the Device model, filtering out our own device
     final mdnsDevices = _discoveryProvider.devices
-        .where((d) => _myIp == null || d.ip != _myIp) // Filter out our own device
+        .where((d) {
+          // Filter out our own device by multiple criteria for robustness
+          final isSelfIp = _myIp != null && d.ip == _myIp;
+          final isSelfId = d.id == _deviceId;
+          final isSelfName = d.name.toLowerCase().trim() == _deviceName.toLowerCase().trim();
+          
+          return !isSelfIp && !isSelfId && !isSelfName;
+        })
         .map((d) => Device(
           id: d.id,
           name: d.name,

@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import os from 'os';
 import { ServerSettings } from '../models/index.js';
 
 /**
@@ -17,7 +18,7 @@ class DeviceManager {
     try {
       // Try to load existing device ID
       let deviceIdSetting = await ServerSettings.findOne({ where: { key: 'device_id' } });
-      
+
       if (!deviceIdSetting) {
         // Generate new UUID
         const newDeviceId = uuidv4();
@@ -35,7 +36,7 @@ class DeviceManager {
       this.deviceName = deviceNameSetting?.value || 'AnyDrop-Desktop';
 
       console.log(`📱 Device initialized: ${this.deviceName} (${this.deviceId})`);
-      
+
       return {
         deviceId: this.deviceId,
         deviceName: this.deviceName
@@ -72,7 +73,7 @@ class DeviceManager {
   async updateDeviceName(newName) {
     try {
       this.deviceName = newName;
-      
+
       // Update in database
       let deviceNameSetting = await ServerSettings.findOne({ where: { key: 'device_name' } });
       if (deviceNameSetting) {
@@ -95,8 +96,29 @@ class DeviceManager {
   getDeviceInfo() {
     return {
       deviceId: this.deviceId,
-      deviceName: this.deviceName
+      deviceName: this.deviceName,
+      ips: this.getDeviceIps()
     };
+  }
+
+  /**
+   * Get all IPv4 LAN addresses
+   */
+  getDeviceIps() {
+    const interfaces = os.networkInterfaces();
+    const ips = [];
+
+    Object.keys(interfaces).forEach((ifname) => {
+      interfaces[ifname].forEach((iface) => {
+        // Skip internal (non-127.0.0.1) and non-IPv4
+        if ('IPv4' !== iface.family || iface.internal !== false) {
+          return;
+        }
+        ips.push(iface.address);
+      });
+    });
+
+    return ips;
   }
 }
 

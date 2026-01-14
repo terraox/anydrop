@@ -47,6 +47,7 @@ dependencies:
 
   # HTTP Server (for web app to discover phone)
   shelf: ^1.4.0
+  shelf_web_socket: ^2.0.0
   mime: ^1.0.0
 
   # File System & Permissions

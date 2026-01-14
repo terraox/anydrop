@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
+import { Toaster } from 'sonner';
 
 import DashboardLayout from './layout/DashboardLayout';
 import AdminLayout from './layout/AdminLayout';
@@ -58,6 +59,7 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
 export default function App() {
   return (
     <>
+      <Toaster position="top-right" richColors />
       <Routes>
         {/* --- Public Routes --- */}
         <Route path="/login" element={<Login />} />

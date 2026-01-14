@@ -21,7 +21,8 @@ export default function Coupons() {
             setCoupons(response.data);
         } catch (error) {
             console.error("Failed to fetch coupons:", error);
-            toast.error("Failed to load coupons");
+            const msg = error.response?.data?.error || error.message || "Unknown error";
+            toast.error(`Failed to load coupons: ${msg}`);
         } finally {
             setLoading(false);
         }
@@ -54,7 +55,8 @@ export default function Coupons() {
             fetchCoupons();
         } catch (error) {
             console.error("Failed to create coupon:", error);
-            toast.error("Failed to create coupon");
+            const msg = error.response?.data?.error || error.message || "Unknown error";
+            toast.error(`Failed to create coupon: ${msg}`);
         }
     };
 
@@ -150,8 +152,8 @@ export default function Coupons() {
 
             {/* --- CREATE COUPON MODAL --- */}
             {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}>
-                    <div className="w-full max-w-lg rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-8 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}>
+                    <div className="w-full max-w-lg rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-8 shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-4 mb-6">
                             <h3 className="text-xl font-semibold text-zinc-900 dark:text-white">Create New Coupon</h3>
                             <button onClick={() => setIsModalOpen(false)} className="text-zinc-500 hover:text-zinc-700 dark:hover:text-white p-1 transition-colors">

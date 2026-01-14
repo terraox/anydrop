@@ -49,6 +49,7 @@ class _SendHubState extends State<SendHub> {
       case 'paste':
         _handlePaste();
         break;
+      case 'textMessage': // Renamed 'text' to match? No stick to 'text'
       case 'text':
         _showTextInput();
         break;
@@ -77,6 +78,58 @@ class _SendHubState extends State<SendHub> {
   }
 
   List<dynamic>? _pendingFiles;
+  String? _pendingText;
+
+  void _handleTextSelected(String text) {
+     if (_selectedDevice == null) {
+       ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Text ready. Now select a device to send to.'),
+          backgroundColor: AppColors.violet500,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      setState(() {
+        _pendingText = text;
+        _pendingFiles = null; // Clear files if text selected
+      });
+     } else {
+       _sendTextToDevice(text, _selectedDevice!);
+     }
+  }
+  
+  void _sendTextToDevice(String text, Device device) async {
+      final transferService = context.read<TransferService>();
+      try {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('Sending text to ${device.name}...'),
+                backgroundColor: AppColors.violet500,
+            )
+          );
+          
+          await transferService.sendText(device, text);
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('Text sent to ${device.name}!'),
+                backgroundColor: AppColors.emerald500,
+            )
+          );
+      } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('Failed to send text: $e'),
+                backgroundColor: AppColors.red500,
+            )
+          );
+      }
+      
+      setState(() {
+          _pendingText = null;
+      });
+  }
 
   void _sendFilesToDevice(List<dynamic> files, Device device) async {
     final transferService = context.read<TransferService>();
@@ -143,13 +196,17 @@ class _SendHubState extends State<SendHub> {
     }
   }
 
-  void _showTextInput() {
-    showModalBottomSheet(
+  void _showTextInput() async {
+    final text = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _TextInputSheet(),
     );
+    
+    if (text != null && text.isNotEmpty) {
+        _handleTextSelected(text);
+    }
   }
 
   @override
@@ -332,6 +389,8 @@ class _SendHubState extends State<SendHub> {
                               // If there are pending files, send them now
                               if (_pendingFiles != null && _pendingFiles!.isNotEmpty) {
                                 _sendFilesToDevice(_pendingFiles!, device);
+                              } else if (_pendingText != null) {
+                                  _sendTextToDevice(_pendingText!, device);
                               }
                             },
                           );
@@ -524,7 +583,7 @@ class _TextInputSheetState extends State<_TextInputSheet> {
               child: ElevatedButton.icon(
                 onPressed: () {
                   if (_controller.text.isNotEmpty) {
-                    Navigator.pop(context);
+                    Navigator.pop(context, _controller.text);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: const Text('Text ready to send'),

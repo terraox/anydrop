@@ -137,6 +137,10 @@ class LocalTransferWebSocketService {
                 console.log('❌ Transfer REJECTED:', data.transferId);
                 this._emit('reject', data);
                 break;
+            case 'TEXT_MESSAGE':
+                console.log('📝 Text Message Received:', data.text);
+                this._emit('textMessage', data);
+                break;
             default:
                 console.log('📨 Unknown message type:', data.type);
         }

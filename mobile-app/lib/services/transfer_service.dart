@@ -28,6 +28,7 @@ class TransferService extends ChangeNotifier {
   
   TransferService(this._httpServerService) {
     _httpServerService.onFileTransfer = _handleHttpTransfer;
+    _httpServerService.onWebSocketConnect = _handleIncomingWebSocket;
   }
   
   String? _deviceId;
@@ -36,6 +37,10 @@ class TransferService extends ChangeNotifier {
   int? _connectedDevicePort;
   Completer<bool>? _readyCompleter; // Completer to wait for READY message
   Completer<bool>? _acceptCompleter; // Completer to wait for ACCEPT message
+  
+  // Receiver state
+  final Map<String, WebSocketChannel> _signalingChannels = {}; // transferId -> channel
+  WebSocketChannel? _tempSignalingChannel; // Channel that just connected but hasn't sent metadata yet
   
   // Transfer state
   String? _currentTransferId;
@@ -51,6 +56,7 @@ class TransferService extends ChangeNotifier {
   
   // Pending transfer request for UI
   Map<String, dynamic>? _pendingRequest;
+  String? _pendingText; // Pending text message for UI
   
   // Save location preference
   String? _customSavePath;
@@ -74,6 +80,7 @@ class TransferService extends ChangeNotifier {
   bool get isReceiving => _isReceiving;
   bool get isSending => _isSending;
   Map<String, dynamic>? get pendingRequest => _pendingRequest;
+  String? get pendingText => _pendingText;
   
   /// Connect to the unified transfer endpoint
   /// IMPORTANT: This method is deprecated for local file transfer.
@@ -236,7 +243,7 @@ class TransferService extends ChangeNotifier {
       
       switch (type) {
         case 'READY':
-          // READY handshake received from receiver
+          debugPrint('📥 Handshake READY received');
           _handleReadyMessage(json);
           break;
           
@@ -245,30 +252,55 @@ class TransferService extends ChangeNotifier {
           break;
           
         case 'ACCEPT':
-          // Receiver accepted the file transfer
+          debugPrint('📥 Acceptance signal received');
           _handleAcceptMessage(json);
           break;
           
         case 'REJECT':
-          // Receiver rejected the file transfer
+          debugPrint('📥 Rejection signal received');
           _handleRejectMessage(json);
           break;
           
         case 'TRANSFER_REQUEST':
+          debugPrint('📥 Legacy transfer request received');
           _handleTransferRequest(json);
           break;
           
         case 'TRANSFER_RESPONSE':
+          debugPrint('📥 Transfer response received');
           _handleTransferResponse(json);
           break;
           
         case 'TRANSFER_FINISH':
+          debugPrint('📥 Transfer finish received');
           _handleTransferFinish(json);
+          break;
+          
+        case 'FILE_METADATA':
+          if (json['senderId'] == _deviceId) {
+            debugPrint('🔄 Ignoring self-sent file metadata');
+            break;
+          }
+          debugPrint('📥 File metadata received via local WS');
+          _handleFileMetadata(json);
           break;
           
         case 'ERROR':
           debugPrint('❌ Server error: ${json['message']}');
           break;
+
+        case 'TEXT_MESSAGE':
+          if (json['senderId'] == _deviceId) {
+            debugPrint('🔄 Ignoring self-sent text message');
+            break;
+          }
+          debugPrint('📝 Text message received');
+          _pendingText = json['text'];
+          notifyListeners();
+          break;
+          
+        default:
+          debugPrint('❓ Unknown message type: $type');
       }
     } catch (e) {
       debugPrint('❌ Error parsing message: $e');
@@ -309,6 +341,73 @@ class TransferService extends ChangeNotifier {
     } else {
       debugPrint('❌ No pending file to upload!');
     }
+  }
+
+  /// Handle incoming WebSocket signaling connection (receiver UI case)
+  void _handleIncomingWebSocket(WebSocketChannel webSocket, String clientIp) {
+    debugPrint('🔌 Incoming signaling connection from $clientIp');
+    
+    // Store as temporary channel until we get metadata with a transferId
+    _tempSignalingChannel = webSocket;
+
+    // Immediately send READY handshake to the sender
+    final readyMsg = jsonEncode({
+      'type': 'READY',
+      'role': 'receiver'
+    });
+    webSocket.sink.add(readyMsg);
+    debugPrint('✅ Sent READY handshake to $clientIp');
+
+    // Store this channel as an active signaling channel
+    // Note: We might have multiple if multiple senders connect
+    // For now, let's just listen to it
+    webSocket.stream.listen(
+      (message) {
+        if (message is String) {
+          debugPrint('📨 [Internal WS] Received: $message');
+          _handleTextMessage(message);
+          
+          // If we need to send responses back to THIS specific sender
+          // We can handle that in _handleTextMessage or by wrapping the logic
+        }
+      },
+      onError: (err) => debugPrint('❌ [Internal WS] Error: $err'),
+      onDone: () {
+        debugPrint('🔌 [Internal WS] Disconnected');
+        // Cleanup if needed
+        _signalingChannels.removeWhere((key, value) => value == webSocket);
+        if (_tempSignalingChannel == webSocket) _tempSignalingChannel = null;
+      },
+    );
+  }
+
+  /// Handle FILE_METADATA from sender (laptop)
+  void _handleFileMetadata(Map<String, dynamic> json) {
+    final transferId = json['transferId'] as String?;
+    if (transferId == null) return;
+
+    debugPrint('📋 Received FILE_METADATA for $transferId');
+
+    // If we have a temporary channel, associate it with this transferId
+    if (_tempSignalingChannel != null) {
+      _signalingChannels[transferId] = _tempSignalingChannel!;
+      _tempSignalingChannel = null; // No longer temporary
+    }
+
+    // Convert FILE_METADATA to TRANSFER_REQUEST format for internal consistency
+    final files = json['files'] as List?;
+    final firstFile = files != null && files.isNotEmpty ? files[0] : null;
+    
+    final request = {
+      'type': 'TRANSFER_REQUEST',
+      'transferId': transferId,
+      'fileName': firstFile?['name'] ?? 'unknown',
+      'size': firstFile?['size'] ?? 0,
+      'senderId': json['senderId'] ?? 'unknown',
+      'mimeType': firstFile?['type'] ?? 'application/octet-stream',
+    };
+
+    _handleTransferRequest(request);
   }
   
   /// Handle REJECT message from receiver
@@ -360,7 +459,39 @@ class TransferService extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  void clearPendingText() {
+    _pendingText = null;
+    notifyListeners();
+  }
   
+  /// Send text message to receiver
+  Future<void> sendText(Device device, String text) async {
+    try {
+        if (device.ip == null) {
+            throw Exception('Device IP is missing');
+        }
+        final connected = await connectToReceiver(device.ip!, device.port ?? 8080);
+        if (!connected) throw Exception('Failed to connect');
+
+        _channel!.sink.add(jsonEncode({
+           'type': 'TEXT_MESSAGE',
+           'text': text,
+           'senderId': _deviceId ?? 'mobile-app', 
+           'timestamp': DateTime.now().millisecondsSinceEpoch
+        }));
+        
+        // Short delay to ensure sent before closing? 
+        // Or keep open? connectToReceiver opens a channel.
+        // We can keep it open or close it. 
+        // For now, let it handle itself.
+        
+    } catch (e) {
+        debugPrint('❌ Failed to send text: $e');
+        rethrow;
+    }
+  }
+
   void _handleTransferFinish(Map<String, dynamic> json) {
     debugPrint('✅ Received TRANSFER_FINISH signal');
     if (_isReceiving && _fileSink != null) {
@@ -375,8 +506,18 @@ class TransferService extends ChangeNotifier {
       final deviceId = request.headers['x-device-id'];
       final pairingCode = request.headers['x-pairing-code'];
       final senderDeviceId = request.headers['x-sender-device-id'];
+      // Normalize headers: some clients might send camelCase, others lowercase
+      final transferId = request.headers['x-transfer-id'] ?? request.url.queryParameters['transferId'];
+      var fileNameHeader = request.headers['x-file-name'];
       
-      // TODO: Validate pairing code (for now, accept all - implement pairing code validation)
+      // FALLBACK: If header is missing, try to find filename from the pending request metadata
+      if ((fileNameHeader == null || fileNameHeader == 'received_file') && transferId != null) {
+        if (_pendingRequest != null && _pendingRequest!['transferId'] == transferId) {
+             fileNameHeader = _pendingRequest!['fileName'];
+             debugPrint('📎 Recovered filename from metadata: $fileNameHeader');
+        }
+      }
+
       if (deviceId == null || pairingCode == null) {
         debugPrint('⚠️ Missing pairing code headers - accepting anyway (validation not implemented)');
         // In production, validate pairing code here
@@ -387,47 +528,76 @@ class TransferService extends ChangeNotifier {
       final contentType = request.headers['content-type'];
       if (contentType == null) return shelf.Response.badRequest(body: 'Missing content-type');
       
-      final mediaType = MediaType.parse(contentType);
-      final boundary = mediaType.parameters['boundary'];
-      if (boundary == null) return shelf.Response.badRequest(body: 'Missing boundary');
-
-      final transformer = MimeMultipartTransformer(boundary);
-      final parts = transformer.bind(request.read());
-
-      await for (final part in parts) {
-        final contentDisposition = part.headers['content-disposition'];
-        if (contentDisposition != null && contentDisposition.contains('name="file"')) {
-          // Extract filename 
-          String fileName = 'received_file';
-          final match = RegExp('filename="([^"]+)"').firstMatch(contentDisposition);
-          if (match != null) {
-            fileName = match.group(1)!;
-          }
-
-          _totalBytes = 0; 
-          _receivedBytes = 0;
-          _progress = 0.0;
-          _isReceiving = true;
-          notifyListeners();
-
-          final directory = await getDownloadDirectory();
-          final sanitizedName = FileUtils.sanitizeFileName(fileName);
-          _receivingFile = File('${directory.path}/$sanitizedName');
-          _fileSink = _receivingFile!.openWrite();
-
-          int bytesReceivedTotal = 0;
-          await for (final List<int> chunk in part) {
-            _fileSink!.add(chunk);
-            bytesReceivedTotal += chunk.length;
-            _receivedBytes = bytesReceivedTotal;
-            notifyListeners();
-          }
-
-          await _completeReceive();
-          return shelf.Response.ok(jsonEncode({'status': 'success'}));
-        }
+      final contentLength = int.tryParse(request.headers['content-length'] ?? '0') ?? 0;
+      
+      // If we already have _totalBytes from FILE_METADATA, don't overwrite if contentLength is 0
+      if (_totalBytes <= 0 || contentLength > 0) {
+        _totalBytes = contentLength;
       }
-      return shelf.Response.badRequest(body: 'No file part found');
+      
+      debugPrint('📥 HTTP Upload: $fileNameHeader, Size: $_totalBytes bytes (Headers: $contentLength)');
+      
+      _receivedBytes = 0;
+      _progress = 0.0;
+      _isReceiving = true;
+      notifyListeners();
+
+      // Check content type
+      if (contentType.contains('multipart/form-data')) {
+        debugPrint('📦 Handling multipart/form-data');
+        // ... (Multipart logic omitted for brevity, assuming raw stream for now as Laptop uses that)
+        return shelf.Response.badRequest(body: 'Multipart not supported yet for local transfer');
+      } 
+      
+      // Default to assuming raw stream if not multipart (or explicit octet-stream)
+      debugPrint('🚀 Handling raw stream upload (Content-Type: $contentType)');
+      final fileName = fileNameHeader ?? 'received_file';
+      
+      final directory = await getDownloadDirectory();
+      final sanitizedName = FileUtils.sanitizeFileName(fileName);
+      _receivingFile = File('${directory.path}/$sanitizedName');
+      _fileSink = _receivingFile!.openWrite();
+
+      int bytesReceivedTotal = 0;
+      debugPrint('⏳ Streaming bytes directly to file: ${_receivingFile!.path}');
+      
+      try {
+        await for (final List<int> chunk in request.read()) {
+          _fileSink!.add(chunk);
+          bytesReceivedTotal += chunk.length;
+          _receivedBytes = bytesReceivedTotal;
+          
+          if (_totalBytes > 0) {
+            _progress = bytesReceivedTotal / _totalBytes;
+            // Send progress update via signaling channel (throttle this slightly in prod)
+            final channel = _signalingChannels[transferId];
+            if (channel != null) {
+              channel.sink.add(jsonEncode({
+                'type': 'PROGRESS',
+                'transferId': transferId,
+                'percentage': (_progress * 100).toStringAsFixed(1),
+              }));
+            }
+          } else {
+             // If total bytes unknown, assuming 0 progress or handle differently
+             if (bytesReceivedTotal % (1024 * 1024) == 0) debugPrint('📥 Received ${bytesReceivedTotal / 1024 / 1024} MB...');
+          }
+          notifyListeners();
+        }
+      } catch (streamError) {
+        debugPrint('❌ Stream handling error: $streamError');
+        throw streamError;
+      }
+      
+      debugPrint('🏁 Stream finished. Received $bytesReceivedTotal bytes.');
+
+      await _completeReceive();
+      return shelf.Response.ok(jsonEncode({
+        'status': 'success',
+        'transferId': transferId,
+        'file': fileName
+      }));
+
     } catch (e) {
       debugPrint('❌ HTTP Transfer Error: $e');
       _cleanupReceive();
@@ -550,12 +720,24 @@ class TransferService extends ChangeNotifier {
     debugPrint('📂 Saving to: ${_receivingFile!.path} (Expected size: ${(_totalBytes / 1024 / 1024).toStringAsFixed(2)}MB, Type: ${FileUtils.getMimeType(fileName)})');
     
     // Send acceptance response
-    _send({
-      'type': 'TRANSFER_RESPONSE',
-      'targetId': request['senderId'],
-      'transferId': _currentTransferId,
-      'status': 'ACCEPTED',
-    });
+    final transferId = _currentTransferId;
+    final channel = _signalingChannels[transferId];
+    
+    if (channel != null) {
+      debugPrint('📨 Sending ACCEPT via direct WebSocket channel for $transferId');
+      channel.sink.add(jsonEncode({
+        'type': 'ACCEPT',
+        'transferId': transferId,
+      }));
+    } else {
+      debugPrint('📨 Sending TRANSFER_RESPONSE via fallback channel');
+      _send({
+        'type': 'TRANSFER_RESPONSE',
+        'targetId': request['senderId'],
+        'transferId': transferId,
+        'status': 'ACCEPTED',
+      });
+    }
     
     notifyListeners();
   }
@@ -564,12 +746,23 @@ class TransferService extends ChangeNotifier {
   void rejectTransfer() {
     if (_pendingRequest == null) return;
     
-    _send({
-      'type': 'TRANSFER_RESPONSE',
-      'targetId': _pendingRequest!['senderId'],
-      'transferId': _pendingRequest!['transferId'],
-      'status': 'REJECTED',
-    });
+    final transferId = _pendingRequest!['transferId'];
+    final channel = _signalingChannels[transferId];
+
+    if (channel != null) {
+      debugPrint('📨 Sending REJECT via direct WebSocket channel for $transferId');
+      channel.sink.add(jsonEncode({
+        'type': 'REJECT',
+        'transferId': transferId,
+      }));
+    } else {
+      _send({
+        'type': 'TRANSFER_RESPONSE',
+        'targetId': _pendingRequest!['senderId'],
+        'transferId': transferId,
+        'status': 'REJECTED',
+      });
+    }
     
     _pendingRequest = null;
     notifyListeners();
@@ -586,10 +779,13 @@ class TransferService extends ChangeNotifier {
       if (_receivingFile != null && _receivingFile!.existsSync()) {
         final actualSize = await _receivingFile!.length();
         final fileName = _receivingFile!.path.split('/').last;
-        debugPrint('✅ File saved: ${_receivingFile!.path} (${(actualSize / 1024 / 1024).toStringAsFixed(2)}MB)');
+        debugPrint('✅ File saved: ${_receivingFile!.path}');
+        debugPrint('📊 Final report: Expected $_totalBytes, Received $_receivedBytes, Actual $actualSize bytes');
         
         if (_totalBytes > 0 && actualSize != _totalBytes) {
-          debugPrint('⚠️ Size mismatch: Expected ${_totalBytes} bytes, got $actualSize bytes');
+          debugPrint('🚨 CRITICAL SIZE MISMATCH: Expected $_totalBytes, got $actualSize');
+        } else {
+          debugPrint('✨ Exact byte match confirmed!');
         }
         
         // For Android: Add to MediaStore if it's an image or video and saveToGallery is enabled

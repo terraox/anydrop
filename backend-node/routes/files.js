@@ -30,27 +30,42 @@ router.post('/upload', authenticate, upload.single('file'), async (req, res) => 
 
     // 2. Check Daily Transfer Limit
     if (user.plan && user.plan.dailyTransferLimit !== -1) {
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
-      const count = await HistoryItem.count({
-        where: {
-          userId: user.id,
-          createdAt: { [Op.gte]: startOfDay }
-        }
-      });
+      // Reset count if it's a new day
+      if (!user.lastTransferResetDate || user.lastTransferResetDate !== today) {
+        user.dailyTransferCount = 0;
+        user.lastTransferResetDate = today;
+        await user.save();
+      }
 
-      if (count >= user.plan.dailyTransferLimit) {
-        console.log(`❌ Upload rejected: Daily limit reached for user ${user.email} (${count}/${user.plan.dailyTransferLimit})`);
+      if (user.dailyTransferCount >= user.plan.dailyTransferLimit) {
+        console.log(`❌ Upload rejected: Daily limit reached for user ${user.email} (${user.dailyTransferCount}/${user.plan.dailyTransferLimit})`);
         return res.status(403).json({
-          error: `Daily transfer limit reached (${user.plan.dailyTransferLimit}/day). Upgrade for unlimited!`
+          error: `Daily transfer limit reached (${user.plan.dailyTransferLimit}/day). Upgrade for unlimited!`,
+          remainingTransfers: 0
         });
       }
     }
 
     const historyItem = await storeFile(req.file, user);
 
-    res.json(historyItem);
+    // Increment daily transfer count
+    if (user.plan && user.plan.dailyTransferLimit !== -1) {
+      user.dailyTransferCount += 1;
+      await user.save();
+    }
+
+    // Calculate remaining transfers for response
+    let remainingTransfers = null;
+    if (user.plan && user.plan.dailyTransferLimit !== -1) {
+      remainingTransfers = user.plan.dailyTransferLimit - user.dailyTransferCount;
+    }
+
+    res.json({
+      ...historyItem.toJSON(),
+      remainingTransfers
+    });
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ error: 'Upload failed' });

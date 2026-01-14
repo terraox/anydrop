@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, File, X, Wifi, Plus, Zap } from 'lucide-react';
 import { toast } from 'sonner';
@@ -8,6 +8,7 @@ import TransferService from '../../services/transfer.service';
 import WebSocketService from '../../services/websocket.service';
 import discoveryService from '../../services/discovery.service';
 import DeviceSelectionModal from './DeviceSelectionModal';
+import LocalTransferWebSocketService from '../../services/localTransferWebSocket.service';
 import { useDeviceName } from '../../context/DeviceNameContext';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -117,6 +118,8 @@ export default function ClassicOrbit() {
             toast.success(`File received: ${fileName}`);
         };
 
+
+
         discoveryService.addListener(handleLanUpdate);
         discoveryService.scanNetwork();
 
@@ -133,27 +136,103 @@ export default function ClassicOrbit() {
     const [lanDevices, setLanDevices] = useState([]);
 
     // Derived state for total unique devices
-    // Filter out ourselves (by name match or IP match)
+    // Filter out ourselves (by name match or IP match or ID match)
     const normalizedDeviceName = (deviceName || '').trim().toLowerCase();
+    const webDeviceId = localStorage.getItem('anydrop_web_device_id');
+    const [serverDeviceId, setServerDeviceId] = useState(null);
+    const [serverDeviceName, setServerDeviceName] = useState(null);
+    const [serverIps, setServerIps] = useState([]);
 
-    const filteredWsDevices = wsDevices.filter(d => (d.name || '').trim().toLowerCase() !== normalizedDeviceName);
+    // Fetch server identity to filter out the host machine (backend broadcasts itself via mDNS)
+    useEffect(() => {
+        const fetchServerInfo = async () => {
+            try {
+                // Try using api instance first, fallback to raw fetch
+                let data = null;
+                try {
+                    const res = await api.get('/device/info');
+                    data = res.data;
+                } catch (apiErr) {
+                    console.warn('API fetch failed, trying raw fetch for /api/device/info');
+                    const rawRes = await fetch('/api/device/info');
+                    if (rawRes.ok) data = await rawRes.json();
+                }
 
-    // Filter LAN devices - exclude if name matches or IP matches current hostname
+                if (data?.success && data.device) {
+                    if (data.device.deviceId) {
+                        setServerDeviceId(data.device.deviceId);
+                        console.log('🖥️ Server Device ID (Self):', data.device.deviceId);
+                    }
+                    if (data.device.deviceName) {
+                        setServerDeviceName(data.device.deviceName.trim().toLowerCase());
+                        console.log('🖥️ Server Device Name (Self):', data.device.deviceName);
+                    }
+                    if (data.device.ips && Array.isArray(data.device.ips)) {
+                        setServerIps(data.device.ips);
+                        console.log('🖥️ Server Device IPs (Self):', data.device.ips);
+                    }
+                }
+            } catch (err) {
+                console.warn('Failed to fetch server device info', err);
+            }
+        };
+        fetchServerInfo();
+    }, []);
+
+    const filteredWsDevices = wsDevices.filter(d => {
+        const isSelfId = webDeviceId && d.id === webDeviceId;
+        const isServerId = serverDeviceId && (d.id === serverDeviceId || d.deviceId === serverDeviceId);
+
+        const dName = (d.name || '').trim().toLowerCase();
+        const isSelfName = dName === normalizedDeviceName;
+        const isServerName = serverDeviceName && dName === serverDeviceName;
+
+        // Also check if name contains "Web Client" and we are "Web Client" (generic match)
+        const isGenericSelf = d.name === 'Web Client' && normalizedDeviceName === 'web client';
+
+        return !isSelfId && !isServerId && !isSelfName && !isServerName && !isGenericSelf;
+    });
+
+    // Filter LAN devices
     const filteredLanDevices = lanDevices.filter(d => {
         const dName = (d.name || '').trim().toLowerCase();
         const isSelfName = dName === normalizedDeviceName;
-        const isSelfIp = typeof window !== 'undefined' && (d.ip === window.location.hostname || d.ip === '127.0.0.1' || d.ip === 'localhost');
-        return !isSelfName && !isSelfIp;
+        const isServerName = serverDeviceName && dName === serverDeviceName;
+
+        // Also filter if it matches serverDeviceId (if LAN device has ID)
+        const isServerId = serverDeviceId && (d.id === serverDeviceId || d.deviceId === serverDeviceId);
+
+        // ULTIMATE FILTER: Check if IP matches any of Server's IPs (Host Machine)
+        const isServerIp = serverIps.includes(d.ip);
+
+        return !isSelfName && !isServerId && !isServerName && !isServerIp;
     });
 
-    // Deduplicate by name/ID to be safe if device appears in both lists
-    const uniqueDeviceIds = new Set([...filteredWsDevices.map(d => d.name), ...filteredLanDevices.map(d => d.name)]);
-    const neighborCount = uniqueDeviceIds.size;
+    // Merge and Deduplicate: Prefer LAN devices (have IP) over WS devices (might lack IP)
+    const uniqueDevicesMap = new Map();
+
+    // 1. Add WS devices first
+    filteredWsDevices.forEach(d => {
+        const key = d.name || d.id;
+        uniqueDevicesMap.set(key, d);
+    });
+
+    // 2. Add LAN devices (Overwrites WS device if name matches, which is GOOD because LAN has IP)
+    filteredLanDevices.forEach(d => {
+        const key = d.name || d.id; // Must match WS device key logic
+        uniqueDevicesMap.set(key, d);
+    });
+
+    const finalDeviceList = Array.from(uniqueDevicesMap.values());
+    const neighborCount = finalDeviceList.length;
 
     // --- TRANSFER LOGIC ---
     const [isDeviceModalOpen, setIsDeviceModalOpen] = useState(false);
     const [pendingTransferFiles, setPendingTransferFiles] = useState([]);
     const [selectedTargetDevice, setSelectedTargetDevice] = useState(null);
+    const [pendingText, setPendingText] = useState(null);
+    const [textContent, setTextContent] = useState('');
+    const [isTextModalOpen, setIsTextModalOpen] = useState(false);
 
     const handleDeviceSelect = async (device) => {
         setIsDeviceModalOpen(false);
@@ -161,10 +240,30 @@ export default function ClassicOrbit() {
 
         if (pendingTransferFiles.length > 0) {
             toast.success(`Sending ${pendingTransferFiles.length} file(s) to ${device.name}...`);
-            
+
             // Use LocalFileTransferService for local file transfers
             const LocalFileTransferService = (await import('../../services/localFileTransfer.service')).default;
-            
+
+            // Sync handlers to our UI state
+            LocalFileTransferService.onProgress = (transferId, progress) => {
+                setFiles(prev => prev.map(f =>
+                    f.id === transferId ? { ...f, progress: Math.round(progress), status: 'uploading' } : f
+                ));
+            };
+
+            LocalFileTransferService.onComplete = (transferId, fileName) => {
+                setFiles(prev => prev.map(f =>
+                    f.id === transferId ? { ...f, progress: 100, status: 'sent' } : f
+                ));
+            };
+
+            LocalFileTransferService.onError = (transferId, error) => {
+                toast.error(`Transfer ${transferId} failed: ${error}`);
+                setFiles(prev => prev.map(f =>
+                    f.id === transferId ? { ...f, status: 'error' } : f
+                ));
+            };
+
             // Send files sequentially
             for (const file of pendingTransferFiles) {
                 try {
@@ -172,7 +271,8 @@ export default function ClassicOrbit() {
                         file.fileObject,
                         device.ip,
                         device.port || 8080,
-                        localStorage.getItem('anydrop_web_device_id') || 'web-client'
+                        localStorage.getItem('anydrop_web_device_id') || 'web-client',
+                        file.id // Pass the same ID we use in the UI for state syncing
                     );
                     console.log('✅ File transfer initiated:', transferId);
                 } catch (error) {
@@ -180,9 +280,30 @@ export default function ClassicOrbit() {
                     toast.error(`Failed to send ${file.name}: ${error.message}`);
                 }
             }
-            
+
             // Clear pending after initiating
             setPendingTransferFiles([]);
+        }
+
+        // Handle TEXT sending
+        if (pendingText) {
+            try {
+                toast.info(`Sending text to ${device.name}...`);
+                const LocalFileTransferService = (await import('../../services/localFileTransfer.service')).default;
+
+                await LocalFileTransferService.sendText(
+                    pendingText,
+                    device.ip,
+                    device.port || 8080,
+                    localStorage.getItem('anydrop_web_device_id') || 'web-client'
+                );
+
+                toast.success(`Text sent to ${device.name}`);
+                setPendingText(null);
+            } catch (error) {
+                console.error('Failed to send text:', error);
+                toast.error(`Failed to send text: ${error.message}`);
+            }
         }
     };
 
@@ -354,11 +475,10 @@ export default function ClassicOrbit() {
                 onDrop={handleDrop}
             >
 
-                {/* --- Device Selection Modal --- */}
                 <DeviceSelectionModal
                     isOpen={isDeviceModalOpen}
                     onClose={() => setIsDeviceModalOpen(false)}
-                    devices={neighborCount > 0 ? [...filteredWsDevices, ...filteredLanDevices] : []}
+                    devices={finalDeviceList}
                     onSelect={handleDeviceSelect}
                 />
 
@@ -474,7 +594,11 @@ export default function ClassicOrbit() {
                         </motion.div>
 
                         <p className="mt-2 text-[10px] md:text-xs text-zinc-400 dark:text-zinc-500 tracking-wide">
-                            {isDragging ? 'RELEASE TO INITIATE TRANSFER' : 'Upload or Drag File'}
+                            {isDragging ? 'RELEASE TO INITIATE TRANSFER' : (
+                                <span>
+                                    Upload or Drag File • <button onClick={() => setIsTextModalOpen(true)} className="hover:text-violet-500 transition-colors underline decoration-dotted">Send Text</button>
+                                </span>
+                            )}
                         </p>
                     </div>
                 </div>
@@ -609,6 +733,43 @@ export default function ClassicOrbit() {
                     </div>
                 </div>
 
+                {/* --- SEND TEXT MODAL --- */}
+                {isTextModalOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setIsTextModalOpen(false)}>
+                        <div className="w-96 rounded-2xl bg-white dark:bg-zinc-900 p-6 shadow-2xl border border-zinc-200 dark:border-zinc-800" onClick={e => e.stopPropagation()}>
+                            <h3 className="text-lg font-bold mb-4 text-zinc-900 dark:text-white">Send Text</h3>
+                            <textarea
+                                value={textContent}
+                                onChange={(e) => setTextContent(e.target.value)}
+                                className="w-full h-32 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800 focus:ring-2 focus:ring-violet-500 outline-none text-zinc-900 dark:text-white resize-none text-sm font-mono placeholder:text-zinc-400"
+                                placeholder="Paste or type text here..."
+                                autoFocus
+                            />
+                            <div className="flex justify-end gap-2 mt-4">
+                                <button
+                                    onClick={() => setIsTextModalOpen(false)}
+                                    className="px-4 py-2 rounded-lg text-sm font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (textContent.trim()) {
+                                            setPendingText(textContent.trim());
+                                            setTextContent(''); // Clear for next time? Or keep? Clear is better.
+                                            setIsTextModalOpen(false);
+                                            setIsDeviceModalOpen(true);
+                                        }
+                                    }}
+                                    disabled={!textContent.trim()}
+                                    className="px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Select Device
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </>
     );
