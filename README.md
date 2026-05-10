@@ -16,6 +16,9 @@
 Check out the live landing page here:
 [AnyDrop Landing Page](https://anydrop-i5hx45ief-aadityabasisths-projects.vercel.app/)
 
+#### Landing Page Live Preview
+<video src="https://github.com/user-attachments/assets/ff6472a0-baf7-4dc0-bef4-7f8056e05959" width="100%" controls></video>
+
 ## Features
 -  **Zero-config device discovery** via mDNS/Bonjour on local network
 -  **Real-time transfer signaling** via plain WebSocket (`/ws` endpoint)
