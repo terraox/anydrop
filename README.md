@@ -1,127 +1,79 @@
 # AnyDrop - File Transfer Application
 
-A modern file transfer application with cross-platform support (Web, Desktop, Mobile).
+> A modern, cross-platform file transfer application that enables seamless, peer-to-peer file sharing across devices on a local network — without cloud intermediaries.
 
-## Project Structure
+## Project Demo
+<video src="https://github.com/terraox/anydrop/raw/main/frontend/public/desktop-view(mobile%20to%20desktop).mp4" width="100%" controls></video>
 
-```
-anydrop/
-├── frontend/          # React + Vite frontend
-├── backend-node/      # Node.js backend (Express + Socket.io) - ACTIVE
-├── mobile-app/        # Flutter mobile app
-└── landing-page/     # Landing page (optional)
-```
+## Live Landing Page
+Check out the live landing page here:
+[AnyDrop Landing Page](https://anydrop-i5hx45ief-aadityabasisths-projects.vercel.app/)
 
-**Note:** The `backend/` folder (Java/Spring Boot) is legacy and not actively used. All backend functionality is in `backend-node/`. The `backend/target/` directory is ignored by `.gitignore`.
+## Features
+-  **Zero-config device discovery** via mDNS/Bonjour on local network
+-  **Real-time transfer signaling** via plain WebSocket (`/ws` endpoint)
+-  **Raw streaming uploads** — no multipart encoding overhead (`req.pipe(out)`)
+-  **Cross-platform** — works between phone and any browser
+-  **JWT-based auth** for the web dashboard
+-  **Admin panel** with user management, plans, and coupons
+-  **Transfer history** tracking per user
 
-## Quick Start
+## Quick Start & Installation
 
 ### Prerequisites
-
 - Node.js (v18 or higher)
 - PostgreSQL database
 - npm or yarn
 
 ### Installation
-
 Install all dependencies (root, backend, and frontend):
-
 ```bash
 npm run install:all
 ```
-
-Or install individually:
-
+Or individually:
 ```bash
-# Root dependencies
 npm install
-
-# Backend dependencies
 cd backend-node && npm install
-
-# Frontend dependencies
-cd frontend && npm install
+cd ../frontend && npm install
 ```
 
 ### Development
-
-Start both backend and frontend in development mode:
-
+Start both backend and frontend:
 ```bash
 npm run dev
 ```
 
-This will start:
-- **Backend** on `http://localhost:8080`
-- **Frontend** on `http://localhost:5173` (Vite default port)
+## System Architecture
 
-### Individual Commands
+AnyDrop connects devices via local network using mDNS for discovery and WebSockets for transfer signaling. The actual file transfer happens via raw HTTP streaming for maximum performance.
 
-Start only backend:
-```bash
-npm run dev:backend
-# or
-cd backend-node && npm run dev
+```text
+┌─────────────────────────────────────────────────────────┐
+│                     LOCAL NETWORK                       │
+│                                                         │
+│  ┌──────────────┐    mDNS/Bonjour    ┌───────────────┐  │
+│  │ Flutter App  │◄──────────────────►│ Node.js Server│  │
+│  │ (Mobile)     │                    │ (Desktop)     │  │
+│  └──────┬───────┘                    └───────┬───────┘  │
+│         │  WebSocket (/ws) signaling         │          │
+│         │◄──────────────────────────────────►│          │
+│         │  RAW HTTP POST /upload             │          │
+│         │───────────────────────────────────►│          │
+│                                              │          │
+│                                     ┌────────▼────────┐ │
+│                                     │  React Frontend │ │
+│                                     │  (Web Browser)  │ │
+│                                     └─────────────────┘ │
+└─────────────────────────────────────────────────────────┘
 ```
-
-Start only frontend:
-```bash
-npm run dev:frontend
-# or
-cd frontend && npm run dev
-```
-
-### Production
-
-Build frontend:
-```bash
-npm run build
-```
-
-Start production servers:
-```bash
-npm start
-```
-
-## Backend Configuration
-
-The backend requires a `.env` file in `backend-node/` directory. See `backend-node/README.md` for details.
-
-Default configuration:
-- Backend: `http://localhost:8080`
-- Frontend: `http://localhost:5173`
-
-## Features
-
-- 🔐 JWT Authentication
-- 📁 File Upload/Download
-- 🔄 Real-time file transfers via WebSocket
-- 📱 Cross-platform support
-- 👥 Multi-device discovery
-- 🎛️ Admin dashboard
-- 📊 Transfer history
 
 ## Tech Stack
-
-### Frontend
-- React 18
-- Vite
-- Tailwind CSS
-- React Router
-- Axios
-
-### Backend (Node.js)
-- Express.js
-- Socket.io
-- Sequelize ORM
-- PostgreSQL
-- JWT Authentication
+- **Web Frontend:** React 18, Vite, Tailwind CSS, Framer Motion
+- **Backend:** Node.js, Express.js, WebSocket (ws), Sequelize, PostgreSQL
+- **Mobile App:** Flutter
+- **Landing Page:** Next.js 16
 
 ## Default Admin Credentials
-
 - Email: `admin@anydrop.com`
 - Password: `admin123`
 
-## License
-
-ISC
