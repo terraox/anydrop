@@ -242,7 +242,7 @@ class LocalFileTransferService {
         xhr.open('POST', uploadUrl, true);
 
         // 🚨 MANDATORY: Set headers for raw streaming
-        xhr.setRequestHeader('X-File-Name', file.name);
+        xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
         xhr.setRequestHeader('Content-Type', 'application/octet-stream');
         xhr.setRequestHeader('X-Transfer-Id', transferId);
         xhr.setRequestHeader('X-Sender-Device-Id', senderDeviceId);

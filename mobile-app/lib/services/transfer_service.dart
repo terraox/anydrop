@@ -509,6 +509,13 @@ class TransferService extends ChangeNotifier {
       // Normalize headers: some clients might send camelCase, others lowercase
       final transferId = request.headers['x-transfer-id'] ?? request.url.queryParameters['transferId'];
       var fileNameHeader = request.headers['x-file-name'];
+      if (fileNameHeader != null) {
+        try {
+          fileNameHeader = Uri.decodeComponent(fileNameHeader);
+        } catch (e) {
+          debugPrint('Could not decode filename: $e');
+        }
+      }
       
       // FALLBACK: If header is missing, try to find filename from the pending request metadata
       if ((fileNameHeader == null || fileNameHeader == 'received_file') && transferId != null) {
@@ -1016,7 +1023,7 @@ class TransferService extends ChangeNotifier {
       final request = await httpClient.postUrl(Uri.parse(uploadUrl));
       
       // 🚨 MANDATORY: Set headers for raw binary streaming
-      request.headers.set('X-File-Name', fileName);
+      request.headers.set('X-File-Name', Uri.encodeComponent(fileName));
       request.headers.set('Content-Type', 'application/octet-stream');
       request.headers.set('Content-Length', fileSize.toString());
       request.headers.set('X-Transfer-Id', _currentTransferId ?? '');

@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 8080;
 
 const router = express.Router();
 
-router.put('/name', authenticate, async (req, res) => {
+router.put('/name', async (req, res) => {
   try {
     const { deviceName, deviceIcon = 'laptop' } = req.body;
 
@@ -48,7 +48,7 @@ router.put('/name', authenticate, async (req, res) => {
   }
 });
 
-router.get('/identity', authenticate, async (req, res) => {
+router.get('/identity', async (req, res) => {
   try {
     const deviceNameSetting = await ServerSettings.findOne({ where: { key: 'device_name' } });
     const deviceIconSetting = await ServerSettings.findOne({ where: { key: 'device_icon' } });

@@ -128,22 +128,6 @@ app.get('/api/device/info', (req, res) => {
   });
 });
 
-app.put('/api/device/name', express.json(), async (req, res) => {
-  const { name } = req.body;
-  if (!name) {
-    return res.status(400).json({ error: 'Name is required' });
-  }
-  const success = await deviceManager.setDeviceName(name);
-  if (success) {
-    res.json({
-      success: true,
-      device: deviceManager.getDeviceInfo()
-    });
-  } else {
-    res.status(500).json({ error: 'Failed to update device name' });
-  }
-});
-
 // Pairing code endpoint
 app.get('/api/pairing-code', async (req, res) => {
   const deviceId = deviceManager.getDeviceId();

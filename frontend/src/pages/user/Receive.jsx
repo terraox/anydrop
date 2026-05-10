@@ -105,7 +105,12 @@ export default function Receive() {
                 return;
             }
 
-            const files = data.files || [];
+            const files = data.files || (data.fileName ? [{ name: data.fileName, size: data.size, type: data.mimeType }] : []);
+            if (files.length === 0) {
+                console.warn('⚠️ FILE_METADATA received with no files or fileName');
+                return;
+            }
+
             const newFiles = files.map((file, index) => ({
                 transferId: data.transferId,
                 name: file.name,

@@ -102,7 +102,12 @@ export const createFileServerRouter = (broadcastProgress = null) => {
    * - X-Transfer-Id: Transfer ID from WebSocket signaling
    */
   router.post('/upload', (req, res) => {
-    const fileName = req.headers['x-file-name'] || 'unnamed';
+    let fileName = req.headers['x-file-name'] || 'unnamed';
+    try {
+      fileName = decodeURIComponent(fileName);
+    } catch (e) {
+      console.warn('Could not decode file name:', fileName, e);
+    }
     const transferId = req.headers['x-transfer-id'] || req.query.transferId || `transfer-${Date.now()}`;
     const senderDeviceId = req.headers['x-sender-device-id'] || 'unknown';
     const contentLength = parseInt(req.headers['content-length'] || '0', 10);
